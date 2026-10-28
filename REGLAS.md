@@ -82,3 +82,20 @@ Victoria concede 100 PX a todos una sola vez. Umbrales preparados para niveles 1
 ## Persistencia
 
 Una ranura versionada local conserva semilla del generador pseudoaleatorio, iniciativa, turno, ronda, posiciones, vida, estados, recursos, equipo, inventario, experiencia y resultado. Continuar no repite tiradas ni turnos ya guardados. No admite archivos ajenos ni garantiza compatibilidad con futuras versiones; los guardados incompatibles muestran error.
+
+## Edición ilustrada: nuevas decisiones tácticas
+
+Cada clase dispone también de una segunda habilidad. Comparte la misma acción principal y reserva de recursos con la primera: no concede una acción adicional.
+
+| Clase      | Habilidad         | Coste | Resolución                                                                                                                                              |
+| ---------- | ----------------- | ----: | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Guerrero   | Golpe de escudo   |     1 | Ataque a alcance 1 con el dado de su arma. Si impacta, inmoviliza hasta finalizar el próximo turno del objetivo. Permite preparar un golpe oportunista. |
+| Bárbaro    | Barrido de acero  |     2 | Centro enemigo a alcance 1; d6 + máximo(0, Fuerza + bonificación de furia) físico por enemigo a distancia 1 del centro. Daño directo, sin crítico.      |
+| Pícaro     | Revelar debilidad |     1 | Alcance 4; aplica Expuesto: −2 defensa durante dos turnos del objetivo. Reaplicar renueva duración, no acumula penalización.                            |
+| Mago       | Orbe de fuego     |     2 | Alcance 5; d8 + máximo(0, Inteligencia) de fuego por enemigo en radio Manhattan 2. Daño directo.                                                        |
+| Clérigo    | Luz del alba      |     2 | Alcance 4; d6 + máximo(0, Sabiduría) radiante por enemigo a distancia 1. Cura 3 a cada aliado vivo en esa misma área, hasta su vida máxima.             |
+| Explorador | Lluvia de flechas |     2 | Alcance 6; d4 + máximo(0, Destreza) físico por enemigo en radio Manhattan 2. Daño directo.                                                              |
+
+Las áreas requieren visión hacia el centro y desde el centro a cada afectado. No atraviesan paredes ni dañan aliados; no utilizan la defensa del objetivo y no producen críticos. Cada afectado recibe su propio dado de daño. En cambio, Golpe de escudo hace una tirada de ataque normal.
+
+La interfaz ilumina los objetivos legales para la acción elegida. Pasar sobre un objetivo muestra defensa efectiva y probabilidad base de impacto (incluye críticos y fallo natural, no incluye la repetición de suerte mediana). Efectos directos muestran 100% cuando son legales. Las áreas se previsualizan al pasar sobre un centro válido. Las pistas enemigas son orientativas: la IA vuelve a evaluar después de moverse; no son acciones bloqueadas o garantizadas.

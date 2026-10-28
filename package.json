@@ -7,7 +7,8 @@
     "dev": "vite --host 0.0.0.0",
     "build": "tsc --noEmit && vite build",
     "test": "vitest run",
-    "test:e2e": "node e2e/play.mjs"
+    "test:e2e": "node e2e/play.mjs",
+    "test:visual": "node e2e/illustrated.mjs"
   },
   "dependencies": {
     "react": "^19.2.0",

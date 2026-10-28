@@ -34,3 +34,11 @@ Las habilidades son datos tipados: identificador, nombre, descripción, economí
 ## Validación
 
 Vitest prueba reglas con semillas fijas, fallos/críticos, bloqueo, cobertura, estados, economía, combinaciones raciales, IA, victoria/derrota y round-trip de guardado. Playwright en `e2e/play.mjs` juega mediante controles reales; el planificador solo lee una copia del motor para elegir destinos y objetivos. No inyecta daño ni resultados. También comprueba recarga/continuación y errores JavaScript. Compilación mediante `tsc --noEmit` y Vite.
+
+## Capa visual ilustrada y segunda habilidad
+
+`public/art/heroes.png` es un atlas pintado de seis arquetipos; `Portrait` lo reutiliza mediante posicionamiento CSS, sin acoplar raza y clase en las reglas. `paso-ceniza.png` ilustra el menú y `terrain.png` contiene el atlas de terreno pintado. Son ilustraciones generadas para este proyecto; los originales de trabajo quedan fuera del checkout. Los enemigos comparten retrato de clase, con marco y tratamiento de color distintos.
+
+`secondarySkills`/`classSkills` constituyen el catálogo compartido de habilidades aprendidas. Los campos opcionales `radius`, `die`, `attribute` y `healing` parametrizan el resolutor de áreas; el estado `mark` reduce defensa mediante el mismo cálculo que consume la tirada real. `hitChance` consulta `canUse` y `defense`; `enemyIntent` ofrece una pista heurística sin consumir RNG ni alterar estado.
+
+La interfaz compara PV entre transiciones para efectos temporales de daño y curación; no los serializa. La previsualización de áreas utiliza exactamente radio, distancia Manhattan y línea de visión del motor. Las animaciones se desactivan con `prefers-reduced-motion`. No hay todavía animación esquelética, sonido ni retratos únicos para cada combinación de raza/clase.

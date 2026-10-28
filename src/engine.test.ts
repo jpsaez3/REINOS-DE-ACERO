@@ -14,6 +14,7 @@ import {
   canUse,
   createUnit,
   defense,
+  hitChance,
   distance,
   endTurn,
   has,
@@ -404,4 +405,84 @@ it("completa un encuentro con victoria usando movimiento, habilidades y ataques 
     endTurn(g);
   }
   expect(g.result).toBe("victory");
+});
+
+describe("Opciones tácticas de la edición ilustrada", () => {
+  it("golpe de escudo inmoviliza si impacta y consume un recurso", () => {
+    const { g, u, t } = fixture("Guerrero");
+    g.seed = seedFor(20);
+    expect(use(g, "bash", t.id)).toBe(true);
+    expect(has(t, "root")).toBe(true);
+    expect(u.resource).toBe(9);
+    expect(reachable(g, t, 6).size).toBe(1);
+  });
+  it("revelar debilidad reduce defensa y habilita ataques del grupo, sin acumularse", () => {
+    const { g, u, t } = fixture("Pícaro");
+    const before = defense(g, t, u);
+    expect(use(g, "expose", t.id)).toBe(true);
+    expect(defense(g, t, u)).toBe(before - 2);
+    u.action = 1;
+    use(g, "expose", t.id);
+    expect(defense(g, t, u)).toBe(before - 2);
+  });
+  it("orbe alcanza radio dos pero no atraviesa paredes ni daña aliados", () => {
+    const { g, u, t } = fixture("Mago");
+    u.x = 3;
+    u.y = 2;
+    t.x = 4;
+    t.y = 2;
+    const next = g.units.find((v) => v.id === "e2")!;
+    next.x = 4;
+    next.y = 1;
+    const blocked = g.units.find((v) => v.id === "e3")!;
+    blocked.x = 6;
+    blocked.y = 2;
+    const ally = g.units.find((v) => v.id === "p1")!;
+    ally.x = 3;
+    ally.y = 3;
+    const hp = [next.hp, blocked.hp, ally.hp];
+    expect(use(g, "nova", t.id)).toBe(true);
+    expect(next.hp).toBeLessThan(hp[0]);
+    expect(blocked.hp).toBe(hp[1]);
+    expect(ally.hp).toBe(hp[2]);
+    expect(u.resource).toBe(8);
+  });
+  it("barrido combina daño físico con furia y respeta sus costes", () => {
+    const { g, u, t } = fixture("Bárbaro");
+    u.statuses.push({ kind: "rage", turns: 2 });
+    const hp = t.hp;
+    expect(use(g, "cleave", t.id)).toBe(true);
+    expect(t.hp).toBeLessThanOrEqual(hp - 6);
+    expect(u.resource).toBe(8);
+  });
+  it("luz del alba daña y cura solo aliados vivos en el área visible", () => {
+    const { g, u, t } = fixture("Clérigo");
+    const ally = g.units.find((v) => v.id === "p1")!;
+    ally.x = 3;
+    ally.y = 1;
+    ally.hp = 5;
+    expect(use(g, "radiance", t.id)).toBe(true);
+    expect(t.hp).toBeLessThan(100);
+    expect(ally.hp).toBe(8);
+    expect(u.resource).toBe(8);
+  });
+  it("lluvia de flechas usa radio dos y no se activa sin dos recursos", () => {
+    const { g, u, t } = fixture("Explorador");
+    u.resource = 1;
+    expect(use(g, "volley", t.id)).toBe(false);
+    expect(u.action).toBe(1);
+    u.resource = 2;
+    expect(use(g, "volley", t.id)).toBe(true);
+    expect(u.resource).toBe(0);
+    expect(t.hp).toBeLessThan(100);
+  });
+});
+
+it("la previsión de impacto utiliza defensa, cobertura y marca del mismo motor", () => {
+  const { g, u, t } = fixture("Explorador");
+  expect(hitChance(g, "attack", t)).toBe(50);
+  t.statuses.push({ kind: "mark", turns: 2 });
+  expect(hitChance(g, "attack", t)).toBe(60);
+  u.action = 0;
+  expect(hitChance(g, "attack", t)).toBe(null);
 });

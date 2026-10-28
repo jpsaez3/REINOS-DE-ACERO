@@ -16,6 +16,7 @@ Desde la raíz del repositorio. Abre la dirección que indique Vite en tu navega
 ```sh
 npm test          # pruebas del motor, incluida victoria y derrota completas
 npm run build    # comprobación TypeScript y compilación de producción
+npm run test:visual # arte, áreas, recursos y daño en Chromium
 npm run test:e2e # Chromium instalado en /usr/bin/chromium; Vite debe estar en puerto 5173
 ```
 
@@ -50,3 +51,11 @@ Se guarda automáticamente después de cada cambio, incluidos turnos enemigos y 
 ## Alcance actual
 
 Un tablero, tres enemigos, una habilidad distintiva por clase más ataque básico y poción; aliento adicional dracónico. Renderizado con cuadrícula DOM/CSS en React: permite foco, tooltips y pruebas de interacción sin acoplar el motor a Phaser. Sin alturas, exploración, campaña, diálogos, tienda, editor de equipo ni creación de mapas. Los equipos de clase son fijos; pociones son consumibles funcionales. Hay estructura de nivel 1–5 y un ascenso a nivel 2 tras ganar; no hay cinco niveles de contenido. No implementa el reglamento completo de D&D.
+
+## Edición ilustrada
+
+Incluye retratos pintados, ilustración del Paso Ceniza, fichas con marcos de facción, tablero con piedra/musgo/madera, indicadores de estado, daño y curación animados y avisos de las últimas acciones. Todo el arte está incluido en `public/art`; no se descarga de terceros al jugar. Los retratos representan seis arquetipos de clase y se reutilizan para las combinaciones de raza/clase y enemigos; todavía no existe un retrato único por combinación. Las preferencias del sistema para reducir movimiento se respetan.
+
+Cada clase dispone de **dos habilidades** además del ataque básico; el coste de las áreas nuevas obliga a elegir cómo gastar los recursos. Puedes consultar la probabilidad de impacto, previsualizar áreas y leer pistas de las intenciones enemigas. Consulta el añadido al final de REGLAS.md para los costes y efectos exactos. Las partidas anteriores conservan compatibilidad; las nuevas habilidades se obtienen al actualizar la aplicación.
+
+Para actualizar una instalación descargada como ZIP en Windows: detén la terminal anterior con Ctrl+C, descarga de nuevo desde GitHub y extrae en una carpeta nueva. Abre `cmd` en esa carpeta, ejecuta `npm ci` y después `npm run dev`. El guardado depende del navegador y del puerto: conserva ambos si quieres continuar la misma partida.

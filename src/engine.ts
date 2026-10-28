@@ -1,6 +1,7 @@
 import {
   abilities,
   classes,
+  classSkills,
   defaultStats,
   pointCost,
   XP_THRESHOLDS,
@@ -10,7 +11,7 @@ import {
 } from "./content";
 export type Pos = { x: number; y: number };
 export type Status = {
-  kind: "guard" | "rage" | "slow" | "root" | "bless";
+  kind: "guard" | "rage" | "slow" | "root" | "bless" | "mark";
   turns: number;
 };
 export interface Unit extends Pos {
@@ -235,7 +236,8 @@ const nearCover = (u: Pos) =>
 export function defense(g: Game, u: Unit, attacker: Pos): number {
   return (
     u.def +
-    (has(u, "bless") ? 2 : 0) +
+    (has(u, "bless") ? 2 : 0) -
+    (has(u, "mark") ? 2 : 0) +
     (has(u, "rage") ? -2 : 0) +
     (distance(u, attacker) > 1 && nearCover(u) ? 2 : 0) +
     (u.race === "Enano" && nearCover(u) ? 1 : 0) +
@@ -347,7 +349,7 @@ export function canUse(g: Game, id: string, target: Unit): string | null {
     ![
       "attack",
       "potion",
-      classes[u.cls].skill,
+      ...classSkills(u.cls),
       ...(u.race === "Dracónido" ? ["breath"] : []),
     ].includes(id)
   )
@@ -400,6 +402,9 @@ export function use(g: Game, id: string, targetId: string): boolean {
   } else if (a.effect === "guard" || a.effect === "rage") {
     status(u, a.effect, a.duration + 1);
     if (a.effect === "rage") u.bonus = 1;
+  } else if (a.effect === "mark") {
+    status(t, "mark", a.duration);
+    note(g, `${t.name} queda expuesto: −2 defensa.`);
   } else if (a.effect === "heal") {
     const n = roll(g, 6) + Math.max(0, mod(u.stats.Sabiduría));
     t.hp = Math.min(t.maxHp, t.hp + n);
@@ -411,21 +416,38 @@ export function use(g: Game, id: string, targetId: string): boolean {
       (v) =>
         v.hp > 0 &&
         v.team !== u.team &&
-        distance(v, t) <= 1 &&
+        distance(v, t) <= (a.radius ?? 1) &&
         lineOfSight(t, v),
     )) {
       hurt(
         g,
         v,
-        roll(g, 6) +
+        roll(g, a.die ?? 6) +
           Math.max(
             0,
-            mod(u.stats[id === "breath" ? "Constitución" : "Inteligencia"]),
+            mod(
+              u.stats[
+                a.attribute ??
+                  (id === "breath" ? "Constitución" : "Inteligencia")
+              ],
+            ) + (a.damageType === "physical" && has(u, "rage") ? 3 : 0),
           ),
         a.damageType,
       );
       if (a.effect === "slow") status(v, "slow", a.duration);
     }
+    if (a.healing)
+      for (const ally of g.units.filter(
+        (v) =>
+          v.hp > 0 &&
+          v.team === u.team &&
+          distance(v, t) <= (a.radius ?? 1) &&
+          lineOfSight(t, v),
+      )) {
+        const amount = Math.min(a.healing, ally.maxHp - ally.hp);
+        ally.hp += amount;
+        note(g, `${ally.name} recupera ${amount} PV por Luz del alba.`);
+      }
   } else {
     let d = roll(g, 20);
     if (d === 1 && u.race === "Mediano" && u.luck) {
@@ -613,4 +635,25 @@ export function load(raw: string): Game {
       throw Error("Personaje inválido");
   }
   return g;
+}
+
+export function hitChance(g: Game, id: string, t: Unit): number | null {
+  if (canUse(g, id, t)) return null;
+  if (!["damage", "root"].includes(abilities[id].effect)) return 100;
+  const u = active(g),
+    needed = defense(g, t, u) - 2 - mod(u.stats[classes[u.cls].stat]);
+  return Math.max(5, Math.min(95, (21 - needed) * 5));
+}
+export function enemyIntent(g: Game, u: Unit): string {
+  if (u.hp <= 0) return "Fuera de combate";
+  const target = g.units
+    .filter((v) => v.hp > 0 && v.team !== u.team)
+    .sort((a, b) => a.hp + distance(u, a) * 2 - (b.hp + distance(u, b) * 2))[0];
+  const behavior =
+    u.ai === "fighter"
+      ? "Acercarse y cerrar el paso"
+      : u.ai === "archer"
+        ? "Buscar tiro de sujeción y mantener distancia"
+        : "Buscar un grupo para lanzar escarcha";
+  return `${behavior}${target ? " · amenaza a " + target.name : ""}`;
 }

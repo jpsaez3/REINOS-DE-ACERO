@@ -96,7 +96,19 @@ export interface Ability {
   range: number;
   cost: number;
   target: "enemy" | "ally" | "self";
-  effect: "damage" | "slow" | "root" | "guard" | "rage" | "heal" | "area";
+  effect:
+    | "damage"
+    | "slow"
+    | "root"
+    | "guard"
+    | "rage"
+    | "heal"
+    | "area"
+    | "mark";
+  radius?: number;
+  die?: number;
+  attribute?: keyof Stats;
+  healing?: number;
   duration: number;
   condition: string;
   damageType: "physical" | "cold" | "fire" | "radiant";
@@ -241,3 +253,116 @@ export const defaultStats = (c: Class): Stats => {
 export const pointCost = (s: Stats) =>
   Object.values(s).reduce((n, v) => n + v - 8 + (v > 13 ? v - 13 : 0), 0);
 export const XP_THRESHOLDS = [0, 100, 300, 600, 1000];
+
+/** A second option per class, shared by UI and engine. */
+export const secondarySkills: Record<Class, string> = {
+  Guerrero: "bash",
+  Bárbaro: "cleave",
+  Pícaro: "expose",
+  Mago: "nova",
+  Clérigo: "radiance",
+  Explorador: "volley",
+};
+Object.assign(abilities, {
+  bash: {
+    id: "bash",
+    name: "Golpe de escudo",
+    description:
+      "Ataque cuerpo a cuerpo. Si impacta, inmoviliza un turno: abre una oportunidad para el pícaro.",
+    action: "main",
+    range: 1,
+    cost: 1,
+    target: "enemy",
+    effect: "root",
+    duration: 1,
+    condition: "Enemigo adyacente y visible.",
+    damageType: "physical",
+  },
+  cleave: {
+    id: "cleave",
+    name: "Barrido de acero",
+    description:
+      "Daño directo d6 + Fuerza a enemigos en cruz alrededor del objetivo. Ideal para romper un grupo.",
+    action: "main",
+    range: 1,
+    cost: 2,
+    target: "enemy",
+    effect: "area",
+    duration: 0,
+    condition: "Centro adyacente; las paredes detienen el área.",
+    damageType: "physical",
+    radius: 1,
+    die: 6,
+    attribute: "Fuerza",
+  },
+  expose: {
+    id: "expose",
+    name: "Revelar debilidad",
+    description:
+      "Marca a un enemigo visible: −2 defensa durante sus dos próximos turnos. Prepara los ataques de todo el grupo.",
+    action: "main",
+    range: 4,
+    cost: 1,
+    target: "enemy",
+    effect: "mark",
+    duration: 2,
+    condition: "Enemigo visible.",
+    damageType: "physical",
+  },
+  nova: {
+    id: "nova",
+    name: "Orbe de fuego",
+    description:
+      "d8 + Inteligencia de fuego a enemigos en un radio de 2 casillas. Cuesta dos recursos; no daña aliados.",
+    action: "main",
+    range: 5,
+    cost: 2,
+    target: "enemy",
+    effect: "area",
+    duration: 0,
+    condition: "Centro visible; cada afectado necesita visión desde el centro.",
+    damageType: "fire",
+    radius: 2,
+    die: 8,
+    attribute: "Inteligencia",
+  },
+  radiance: {
+    id: "radiance",
+    name: "Luz del alba",
+    description:
+      "d6 + Sabiduría radiante en cruz; cura 3 PV a aliados vivos dentro de esa misma área.",
+    action: "main",
+    range: 4,
+    cost: 2,
+    target: "enemy",
+    effect: "area",
+    duration: 0,
+    condition: "Enemigo visible; no resucita aliados.",
+    damageType: "radiant",
+    radius: 1,
+    die: 6,
+    attribute: "Sabiduría",
+    healing: 3,
+  },
+  volley: {
+    id: "volley",
+    name: "Lluvia de flechas",
+    description:
+      "d4 + Destreza de daño directo a enemigos en radio 2. Aprovecha grupos expuestos; cuesta dos recursos.",
+    action: "main",
+    range: 6,
+    cost: 2,
+    target: "enemy",
+    effect: "area",
+    duration: 0,
+    condition: "Centro y afectados visibles desde el centro.",
+    damageType: "physical",
+    radius: 2,
+    die: 4,
+    attribute: "Destreza",
+  },
+} satisfies Record<string, Ability>);
+export const classSkills = (cls: Class) => [
+  classes[cls].skill,
+  secondarySkills[cls],
+];
