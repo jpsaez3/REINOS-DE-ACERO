@@ -11,9 +11,11 @@ const labels: Record<string, string> = {
 export function ActionStory({
   event,
   playing = false,
+  outcomeVisible = true,
 }: {
   event: CombatEvent;
   playing?: boolean;
+  outcomeVisible?: boolean;
 }) {
   const miss = event.details.some((s) => s.includes(": fallo"));
   const critical = event.details.some((s) => s.includes("CRÍTICO"));
@@ -45,8 +47,8 @@ export function ActionStory({
           {event.actorId === event.targetId
             ? "Sobre sí mismo"
             : `Objetivo: ${event.targetName}`}{" "}
-          {miss && <b className="miss">FALLO</b>}
-          {critical && <b>CRÍTICO</b>}
+          {outcomeVisible && miss && <b className="miss">FALLO</b>}
+          {outcomeVisible && critical && <b>CRÍTICO</b>}
         </p>
       )}
       {event.kind === "move" ? (
@@ -61,7 +63,14 @@ export function ActionStory({
           No dispone de un objetivo o habilidad válidos en su posición actual.
         </p>
       )}
-      {!!event.effects.length && (
+      {!outcomeVisible && (
+        <p className="resolving-action">
+          {event.kind === "move"
+            ? "Recorriendo el camino…"
+            : "Preparación y ejecución…"}
+        </p>
+      )}
+      {outcomeVisible && !!event.effects.length && (
         <div className="story-effects">
           {event.effects.map((e) => (
             <div key={e.id}>
@@ -88,14 +97,16 @@ export function ActionStory({
           {event.costs.resources} recurso(s)
         </div>
       )}
-      <details className="story-details">
-        <summary>Ver tiradas y resolución completa</summary>
-        <ol>
-          {event.details.map((s, i) => (
-            <li key={i}>{s}</li>
-          ))}
-        </ol>
-      </details>
+      {outcomeVisible && (
+        <details className="story-details">
+          <summary>Ver tiradas y resolución completa</summary>
+          <ol>
+            {event.details.map((s, i) => (
+              <li key={i}>{s}</li>
+            ))}
+          </ol>
+        </details>
+      )}
     </section>
   );
 }

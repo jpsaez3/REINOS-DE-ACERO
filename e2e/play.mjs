@@ -30,7 +30,7 @@ try {
   await page.screenshot({ path: "/tmp/reinos-combate.png", fullPage: true });
   let restored = false,
     turns = 0;
-  for (let i = 0; i < 450; i++) {
+  for (let i = 0; i < 1200; i++) {
     const state = await page.evaluate(() =>
       JSON.parse(localStorage.getItem("reinos-acero-v1")),
     );

@@ -41,7 +41,7 @@ Vitest prueba reglas con semillas fijas, fallos/críticos, bloqueo, cobertura, e
 
 `secondarySkills`/`classSkills` constituyen el catálogo compartido de habilidades aprendidas. Los campos opcionales `radius`, `die`, `attribute` y `healing` parametrizan el resolutor de áreas; el estado `mark` reduce defensa mediante el mismo cálculo que consume la tirada real. `hitChance` consulta `canUse` y `defense`; `enemyIntent` ofrece una pista heurística sin consumir RNG ni alterar estado.
 
-La interfaz compara PV entre transiciones para efectos temporales de daño y curación; no los serializa. La previsualización de áreas utiliza exactamente radio, distancia Manhattan y línea de visión del motor. Las animaciones se desactivan con `prefers-reduced-motion`. No hay todavía animación esquelética, sonido ni retratos únicos para cada combinación de raza/clase.
+La interfaz representa cambios de PV a partir de los efectos del evento y los revela al llegar al impacto visual. La previsualización de áreas utiliza exactamente radio, distancia Manhattan y línea de visión del motor. Las animaciones se desactivan con `prefers-reduced-motion`. Los cuerpos son figuras SVG articuladas, con equipo por clase y rasgos raciales; no hay modelos 3D, sonido ni retratos pintados únicos para cada combinación de raza/clase.
 
 ## Eventos, relato y escenario continuo
 
@@ -52,3 +52,15 @@ La interfaz compara PV entre transiciones para efectos temporales de daño y cur
 `courtyard.png` es una ilustración continua del patio, ajustada verticalmente para colocar las ruinas cerca de los obstáculos lógicos del tablero. Sus contornos artísticos no son un mapa de colisión a nivel de píxel: la única fuente de colisión sigue siendo `board`. La capa DOM no pinta suelos ni bordes, mantiene controles accesibles por coordenadas y usa el atlas únicamente para objetos de cobertura/brasas. El SVG superpuesto explica rutas y vínculos entre actor/objetivo. Las ayudas tácticas opcionales exponen las áreas lógicas exactas. El mapa conserva el encuentro y la navegación anteriores.
 
 `e2e/narration.mjs` comprueba la carga del escenario, ausencia de bordes por defecto, ayudas opcionales, movimiento rival separado, anuncio con objetivo real, pausa sin cambios de estado, desglose de una habilidad, un ataque a distancia con trayectoria y recuperación a mitad de turno sin repetir la acción.
+
+## Figuras, proyectiles y reloj de animación
+
+`animation.ts` define clasificación de efectos, fase de impacto, duración y muestreo de caminos. `samplePath` interpola cada segmento ortogonal de la ruta guardada; no traza una diagonal entre origen/destino. `arcPoint` dibuja la trayectoria aérea de las flechas. Son funciones puras, sin reloj ni acceso al RNG de las reglas.
+
+`usePlayback` mantiene un único progreso normalizado mediante `requestAnimationFrame`. Ese progreso controla postura, desplazamiento, trayectoria, impactos, PV visibles y avance de la cola. Al pausar se cancela el frame pendiente y se conserva el progreso; cambiar de ritmo cambia la velocidad restante. Salir al menú pausa la presentación. La progresión y los frames temporales no se guardan: cargar una partida conserva hechos, no vuelve a ejecutar la habilidad.
+
+`Miniature.tsx` dibuja figuras vectoriales con piernas/brazos articulados y equipo diferenciado por clase; la raza modifica rasgos y proporciones. `CombatScene.tsx` las coloca en una capa SVG sobre los controles invisibles, las ordena por profundidad y aplica gestos, proyectiles, llamaradas, hielo, luz y reacciones. Los ataques fallidos no crean explosiones de daño. Los eventos nuevos guardan clase/raza del actor, posición del objetivo y posiciones de los afectados; los campos son opcionales para conservar compatibilidad y la representación admite los eventos antiguos.
+
+La barra de iniciativa, las figuras y el relato ocultan PV posteriores hasta el impacto. La lógica y el guardado se resuelven una sola vez antes de reproducir; ninguna partícula, paso visual o frame llama a `use`, `move` o `roll`. `prefers-reduced-motion` sustituye los recorridos por poses/efectos estáticos.
+
+`animation.test.ts` comprueba rutas sin atajos, efectos distintos, trayectorias, duraciones, independencia del RNG y posiciones inmutables. `e2e/animation.mjs` prepara encuentros aislados con el motor para cubrir las acciones mediante controles reales; verifica movimiento y extremidades en varios frames, pausa exacta, cambio de velocidad, lluvia de flechas, orbe/explosión, hielo, curación, espada, escudo, furia, poción, marca, aliento y accesibilidad. `e2e/play.mjs` sigue validando una partida completa sin preparar resultados.

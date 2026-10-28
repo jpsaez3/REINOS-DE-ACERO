@@ -102,7 +102,7 @@ try {
         return g.units.find((v) => v.id === g.order[g.turn]).resource;
       });
       await target.click();
-      assert.ok((await page.locator(".combat-float").count()) > 0);
+      await page.locator(".combat-float").first().waitFor();
       const after = await page.evaluate(() => {
         const g = JSON.parse(localStorage.getItem("reinos-acero-v1"));
         return g.units.find((v) => v.id === g.order[g.turn]).resource;

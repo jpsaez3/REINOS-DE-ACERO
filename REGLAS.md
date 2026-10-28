@@ -105,3 +105,9 @@ La interfaz ilumina los objetivos legales para la acción elegida. Pasar sobre u
 El escenario continuo es una representación visual del mismo tablero ortogonal. Ocultar sus líneas no cambia el movimiento, la distancia, las paredes ni las coberturas. Las ayudas tácticas se pueden activar para consultar la geometría exacta. Los trazos de ruta muestran el camino real utilizado por la búsqueda de caminos.
 
 La IA conserva su estrategia y economía: ahora resuelve desplazamiento, acción y fin de turno en pasos separados. La habilidad anunciada después del desplazamiento se calcula con el mismo selector que la ejecuta. Cada paso resuelto se guarda antes de avanzar al siguiente. La pausa y el ritmo solo afectan a la presentación; no consumen recursos ni repiten tiradas. No se permite realizar otra acción durante la presentación de la anterior.
+
+## Ejecución visual de las acciones
+
+Las animaciones siguen el resultado de las reglas: caminar no concede movimiento adicional y los proyectiles no realizan tiradas extra. Lluvia de flechas dibuja varias flechas, pero el daño sigue siendo una resolución por enemigo afectado, según su descripción. El fuego y el hielo tampoco infligen daño por cada partícula. Una flecha de un ataque fallido se desvía sin quitar vida.
+
+Los PV mostrados y los efectos se revelan al impactar; el guardado conserva la acción ya resuelta para evitar duplicados tras una recarga. El modo rápido y el movimiento reducido no cambian alcance, recursos, estados, vida ni resultados. La pausa congela el progreso visual y no reinicia los pasos al reanudar.

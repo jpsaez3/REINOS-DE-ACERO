@@ -5,6 +5,9 @@ export interface CombatEvent {
   kind: "move" | "ability" | "wait";
   actorId: string;
   actorName: string;
+  actorClass?: Unit["cls"];
+  actorRace?: Unit["race"];
+  targetPosition?: Pos;
   team: Unit["team"];
   name: string;
   targetId?: string;
@@ -17,6 +20,7 @@ export interface CombatEvent {
   effects: {
     id: string;
     name: string;
+    position?: Pos;
     hpBefore: number;
     hpAfter: number;
     statuses: Status[];
@@ -45,6 +49,14 @@ export function finishRecord(
     round: g.round,
     actorId: u.id,
     actorName: u.name,
+    actorClass: u.cls,
+    actorRace: u.race,
+    targetPosition: data.targetId
+      ? (() => {
+          const target = g.units.find((v) => v.id === data.targetId);
+          return target ? { x: target.x, y: target.y } : undefined;
+        })()
+      : undefined,
     team: u.team,
     ...data,
     from: { x: before.actor.x, y: before.actor.y },
@@ -62,6 +74,7 @@ export function finishRecord(
             {
               id: v.id,
               name: v.name,
+              position: { x: v.x, y: v.y },
               hpBefore: old.hp,
               hpAfter: v.hp,
               statuses: structuredClone(statuses),

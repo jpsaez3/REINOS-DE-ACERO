@@ -38,6 +38,9 @@ import {
 } from "./engine";
 import "./style.css";
 import { ActionStory } from "./ActionStory";
+import { CombatScene } from "./CombatScene";
+import { usePlayback, useReducedMotion } from "./usePlayback";
+import { effectFor, impactPoint } from "./animation";
 import type { CombatEvent } from "./combat-events";
 const KEY = "reinos-acero-v1";
 const statusNames: Record<string, string> = {
@@ -135,45 +138,15 @@ function App() {
       setQueue((q) => [...q, ...fresh]);
     }
   }, [g]);
-  useEffect(() => {
-    if (!queue.length || paused || screen !== "combat") return;
-    const current = queue[0];
-    const ms = fast
-      ? 120
-      : current.kind === "move"
-        ? Math.max(1600, current.path.length * 200)
-        : 3200;
-    const timer = setTimeout(() => setQueue((q) => q.slice(1)), ms);
-    return () => clearTimeout(timer);
-  }, [queue, fast, paused, screen]);
+  const progress = usePlayback(
+    queue[0],
+    fast,
+    paused,
+    screen === "combat",
+    () => setQueue((q) => q.slice(1)),
+  );
+  const reducedMotion = useReducedMotion();
   const presenting = queue.length > 0;
-
-  const [feedback, setFeedback] = useState<
-    { id: string; delta: number; key: number }[]
-  >([]);
-  const previous = useRef<Game | null>(null);
-  useEffect(() => {
-    if (g && previous.current) {
-      const old = previous.current;
-      setFeedback(
-        g.units.flatMap((u) => {
-          const before = old.units.find((v) => v.id === u.id);
-          return before && before.hp !== u.hp
-            ? [
-                {
-                  id: u.id,
-                  delta: u.hp - before.hp,
-                  key: g.seed + g.log.length,
-                },
-              ]
-            : [];
-        }),
-      );
-    }
-    previous.current = g;
-    const timer = setTimeout(() => setFeedback([]), 1000);
-    return () => clearTimeout(timer);
-  }, [g]);
   const actor = g ? active(g) : null,
     player = actor?.team === "party" && g?.result === "playing" && !presenting;
   const change = (fn: (next: Game) => void) => {
@@ -226,7 +199,6 @@ function App() {
     );
     lastSeen.current = 0;
     setQueue([]);
-    previous.current = null;
     setPaused(false);
     setG(newGame(party));
     setChosen("attack");
@@ -240,7 +212,6 @@ function App() {
       const restored = load(raw);
       lastSeen.current = restored.events?.at(-1)?.id ?? 0;
       setQueue([]);
-      previous.current = null;
       setPaused(false);
       setG(restored);
       setChosen("attack");
@@ -283,8 +254,18 @@ function App() {
   const route = hoverPosition
     ? destinations.get(`${hoverPosition.x},${hoverPosition.y}`)
     : undefined;
-  const eventActor = g?.units.find((u) => u.id === queue[0]?.actorId);
-  const eventTarget = g?.units.find((u) => u.id === queue[0]?.targetId);
+  const visualActor = g?.units.find((u) => u.id === queue[0]?.actorId);
+  const impact =
+    queue[0] && visualActor
+      ? reducedMotion
+        ? 0.12
+        : impactPoint(effectFor(queue[0], visualActor.cls))
+      : 0;
+  const outcomeVisible = !presenting || progress >= impact;
+  const displayHp = (u: Unit) =>
+    !outcomeVisible
+      ? (queue[0]?.effects.find((e) => e.id === u.id)?.hpBefore ?? u.hp)
+      : u.hp;
   const trace =
     queue[0]?.kind === "move"
       ? [queue[0].from, ...queue[0].path]
@@ -515,13 +496,13 @@ function App() {
               return (
                 <button
                   key={id}
-                  className={`${actor.id === id ? "current" : ""} ${u.hp <= 0 ? "dead" : ""} ${u.team}`}
+                  className={`${actor.id === id ? "current" : ""} ${displayHp(u) <= 0 ? "dead" : ""} ${u.team}`}
                   onClick={() => setInspect(id)}
                 >
                   <Portrait cls={u.cls} enemy={u.team === "enemy"} />
                   {u.name}
                   <small>
-                    {u.initiative} INI · {u.hp} PV
+                    {u.initiative} INI · {displayHp(u)} PV
                   </small>
                 </button>
               );
@@ -610,19 +591,14 @@ function App() {
                       r=".19"
                     />
                   )}
-                  {eventActor &&
-                    eventTarget &&
-                    eventActor.id !== eventTarget.id && (
-                      <line
-                        className={`action-trace ${queue[0].abilityId ?? ""}`}
-                        x1={eventActor.x + 0.5}
-                        y1={eventActor.y + 0.5}
-                        x2={eventTarget.x + 0.5}
-                        y2={eventTarget.y + 0.5}
-                        markerEnd="url(#action-arrow)"
-                      />
-                    )}
                 </svg>
+                <CombatScene
+                  g={g}
+                  event={queue[0]}
+                  progress={progress}
+                  paused={paused}
+                  reduced={reducedMotion}
+                />
                 {board.flatMap((row, y) =>
                   [...row].map((t, x) => {
                     const u = g.units.find(
@@ -636,18 +612,15 @@ function App() {
                         (hoveredAbility.radius ?? 1) &&
                       lineOfSight(areaTarget, { x, y }) &&
                       t !== "#";
-                    const effect = u
-                      ? feedback.find((f) => f.id === u.id)
-                      : null;
                     return (
                       <button
                         role="gridcell"
                         aria-label={`${x},${y}${u ? " " + u.name : ""}`}
                         key={`${x},${y}`}
-                        className={`tile ${t === "#" ? "wall" : t === "c" ? "cover" : t === "!" ? "hazard" : ""} ${canMove ? "reachable" : ""} ${u ? u.team : ""} ${u?.id === actor.id ? "selected" : ""} ${validTarget ? "valid-target" : ""} ${inArea ? "area-preview" : ""} ${effect ? (effect.delta < 0 ? "struck" : "restored") : ""} ${queue[0]?.actorId === u?.id && u ? "event-source" : ""} ${queue[0]?.targetId === u?.id && u ? "event-target" : ""}`}
+                        className={`tile ${t === "#" ? "wall" : t === "c" ? "cover" : t === "!" ? "hazard" : ""} ${canMove ? "reachable" : ""} ${u ? u.team : ""} ${u?.id === actor.id ? "selected" : ""} ${validTarget ? "valid-target" : ""} ${inArea ? "area-preview" : ""} ${queue[0]?.actorId === u?.id && u ? "event-source" : ""} ${queue[0]?.targetId === u?.id && u ? "event-target" : ""}`}
                         title={
                           u
-                            ? `${u.name} · ${u.hp}/${u.maxHp} PV · defensa ${defense(g, u, actor)}${canUse(g, chosen, u) ? " · " + canUse(g, chosen, u) : " · objetivo válido"}`
+                            ? `${u.name} · ${displayHp(u)}/${u.maxHp} PV · defensa ${defense(g, u, actor)}${canUse(g, chosen, u) ? " · " + canUse(g, chosen, u) : " · objetivo válido"}`
                             : t === "#"
                               ? "Pared: bloquea visión y movimiento"
                               : t === "c"
@@ -686,54 +659,7 @@ function App() {
                           }
                         }}
                       >
-                        {u ? (
-                          <>
-                            <Portrait cls={u.cls} enemy={u.team === "enemy"} />
-                            {effect && (
-                              <span
-                                key={effect.key}
-                                className={`combat-float ${effect.delta > 0 ? "healing" : ""}`}
-                              >
-                                {effect.delta > 0 ? "+" : ""}
-                                {effect.delta}
-                              </span>
-                            )}
-                            {!!u.statuses.length && (
-                              <span
-                                className="status-pips"
-                                title={u.statuses
-                                  .map((st) => statusNames[st.kind])
-                                  .join(", ")}
-                              >
-                                {u.statuses
-                                  .map(
-                                    (st) =>
-                                      ({
-                                        guard: "◇",
-                                        rage: "↑",
-                                        slow: "❄",
-                                        root: "⌁",
-                                        bless: "✧",
-                                        mark: "◎",
-                                      })[st.kind],
-                                  )
-                                  .join("")}
-                              </span>
-                            )}
-                            <small>{u.name.split(" ")[0]}</small>
-                            <i
-                              style={{ width: `${(100 * u.hp) / u.maxHp}%` }}
-                            />
-                          </>
-                        ) : t === "#" ? (
-                          ""
-                        ) : t === "c" ? (
-                          "▧"
-                        ) : t === "!" ? (
-                          "♨"
-                        ) : (
-                          ""
-                        )}
+                        {t === "c" ? "▧" : t === "!" ? "♨" : ""}
                       </button>
                     );
                   }),
@@ -747,7 +673,11 @@ function App() {
             <aside className="sidebar">
               {currentEvent &&
                 (presenting ? (
-                  <ActionStory event={currentEvent} playing />
+                  <ActionStory
+                    event={currentEvent}
+                    playing
+                    outcomeVisible={outcomeVisible}
+                  />
                 ) : (
                   <details className="last-action">
                     <summary>
@@ -887,7 +817,12 @@ function App() {
                               : `Ronda ${event.round}`}
                           </small>
                         </summary>
-                        <ActionStory event={event} />
+                        <ActionStory
+                          event={event}
+                          outcomeVisible={
+                            event.id === queue[0]?.id ? outcomeVisible : true
+                          }
+                        />
                       </details>
                     ))}
                 </div>
@@ -958,8 +893,8 @@ function App() {
               ))}
             </div>
             <p>
-              Vida {viewed.hp}/{viewed.maxHp} · Defensa base {viewed.def} ·
-              Iniciativa {viewed.initiative}
+              Vida {displayHp(viewed)}/{viewed.maxHp} · Defensa base{" "}
+              {viewed.def} · Iniciativa {viewed.initiative}
             </p>
             <h3>Equipo e inventario</h3>
             <p>{viewed.equipment}</p>

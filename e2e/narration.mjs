@@ -94,6 +94,11 @@ try {
   await page.waitForFunction(
     () => JSON.parse(localStorage.getItem("reinos-acero-v1")).aiStage === "end",
   );
+  await page.waitForFunction(
+    () =>
+      document.querySelector(".combat-scene")?.getAttribute("data-impact") ===
+      "true",
+  );
   await page.getByRole("button", { name: "Pausar relato" }).click();
   const story = page.locator(".sidebar>.action-story");
   assert.ok((await story.innerText()).includes(plan.actor));
@@ -136,6 +141,11 @@ try {
       ["attack", "pin", "frost"].includes(e.abilityId)
     );
   }, lastId);
+  await page.waitForFunction(
+    () =>
+      document.querySelector(".combat-scene")?.getAttribute("data-impact") ===
+      "true",
+  );
   await page.getByRole("button", { name: "Pausar relato" }).click();
   const attack = await page.evaluate(() =>
     JSON.parse(localStorage.getItem("reinos-acero-v1")).events.at(-1),
@@ -150,7 +160,7 @@ try {
       attack.targetName,
     ),
   );
-  assert.ok(await page.locator(".action-trace").count());
+  assert.ok(await page.locator(".action-effect").count());
   await page
     .locator(".sidebar>.action-story")
     .getByText("Ver tiradas y resolución completa", { exact: true })

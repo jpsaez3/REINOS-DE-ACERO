@@ -18,6 +18,7 @@ npm test          # pruebas del motor, incluida victoria y derrota completas
 npm run build    # comprobación TypeScript y compilación de producción
 npm run test:visual # arte, áreas, recursos y daño en Chromium
 npm run test:narration # fases rivales, pausa, detalles y recuperación
+npm run test:animation # caminar, flechas, magia, impacto y pausa
 npm run test:e2e # Chromium instalado en /usr/bin/chromium; Vite debe estar en puerto 5173
 ```
 
@@ -45,6 +46,8 @@ Se guarda automáticamente después de cada cambio, incluidos turnos enemigos y 
 - `src/main.tsx`: menú, creación, combate, configuración, ficha y secuencia visual.
 - `src/combat-events.ts`: hechos estructurados, costes y efectos de cada acción.
 - `src/ActionStory.tsx`: relato legible y resolución técnica de las acciones.
+- `src/Miniature.tsx`, `src/CombatScene.tsx`: figuras 2D articuladas y efectos.
+- `src/animation.ts`, `src/usePlayback.ts`: trayectorias y reloj visual pausable.
 - `src/style.css`: diseño adaptable; símbolos y fuentes locales, sin recursos externos.
 - `src/engine.test.ts`: pruebas de reglas y simulaciones completas.
 - `e2e/play.mjs`: partida real en Chromium mediante Playwright.
@@ -57,7 +60,7 @@ Un tablero, tres enemigos, dos habilidades por clase más ataque básico y poci�
 
 ## Edición ilustrada
 
-Incluye retratos pintados, ilustración del Paso Ceniza, fichas con marcos de facción, escenario de ruinas pintado como una imagen continua, indicadores de estado, daño y curación animados y avisos de las últimas acciones. Todo el arte está incluido en `public/art`; no se descarga de terceros al jugar. Los retratos representan seis arquetipos de clase y se reutilizan para las combinaciones de raza/clase y enemigos; todavía no existe un retrato único por combinación. Las preferencias del sistema para reducir movimiento se respetan.
+Incluye retratos pintados, ilustración del Paso Ceniza, figuras articuladas en el escenario y retratos con marcos de facción en la interfaz, escenario de ruinas pintado como una imagen continua, indicadores de estado, daño y curación animados y avisos de las últimas acciones. Todo el arte está incluido en `public/art`; no se descarga de terceros al jugar. Los retratos representan seis arquetipos de clase y se reutilizan para las combinaciones de raza/clase y enemigos; todavía no existe un retrato único por combinación. Las preferencias del sistema para reducir movimiento se respetan.
 
 Cada clase dispone de **dos habilidades** además del ataque básico; el coste de las áreas nuevas obliga a elegir cómo gastar los recursos. Puedes consultar la probabilidad de impacto, previsualizar áreas y leer pistas de las intenciones enemigas. Consulta el añadido al final de REGLAS.md para los costes y efectos exactos. Las partidas anteriores conservan compatibilidad; las nuevas habilidades se obtienen al actualizar la aplicación.
 
@@ -65,10 +68,25 @@ Para actualizar una instalación descargada como ZIP en Windows: detén la termi
 
 ## Leer las acciones de cada personaje
 
-Los rivales actúan por fases: buscan posición, se desplazan, anuncian una habilidad con su objetivo, muestran su resolución y cierran turno. No se pasa al siguiente paso mientras se está mostrando el actual. Las rutas y los enlaces entre atacante y objetivo se dibujan sobre el escenario. Las flechas explican una acción ya resuelta; no son proyectiles físicos ni modifican las reglas.
+Los rivales actúan por fases: buscan posición, se desplazan, anuncian una habilidad con su objetivo, muestran su resolución y cierran turno. No se pasa al siguiente paso mientras se está mostrando el actual. Las figuras recorren la ruta y ejecutan gestos acordes con su acción. Las flechas, hechizos e impactos se animan sobre el escenario. La animación representa una acción ya resuelta por las reglas; no vuelve a tirar dados ni a aplicar daño.
 
 El panel «En curso» identifica al personaje y la acción, muestra PV antes/después, estados y costes reales. «Ver tiradas y resolución completa» abre los dados y los detalles. Usa **Pausar relato** para leer sin prisa y **Reanudar relato** para continuar. El botón **Ritmo** cambia entre detallado y rápido. Los mismos detalles se conservan agrupados en **Historial de acciones**; la última acción también queda disponible durante tu turno.
 
 El mapa no muestra bordes de casillas por defecto. Las rutas aparecen al señalar un destino legal; los colores de área, al preparar una habilidad. La distancia y las colisiones siguen usando la cuadrícula del motor. «Ayudas tácticas» permite verla cuando necesites precisar una posición. Es el mismo encuentro del Paso Ceniza, no una campaña de mapas adicionales.
 
 Los guardados anteriores siguen siendo compatibles. Guardar y recargar a mitad de un turno rival conserva si ya se desplazó o actuó: no repite el ataque. Las animaciones ya vistas no se vuelven a reproducir al cargar; sus resultados siguen en el historial.
+
+## Animaciones de personajes y habilidades
+
+En el escenario se ven figuras 2D vectoriales, con equipo por clase y diferencias de proporción/rasgos por raza. Los retratos pintados se conservan en iniciativa y fichas. Al caminar, la figura recorre cada tramo del camino real, alterna piernas y brazos y levanta algo de polvo. Los ataques cuerpo a cuerpo muestran un avance y un gesto de arma; el escudo se levanta para proteger o golpear.
+
+- Arco/disparo de sujeción: flecha en vuelo y destello al impactar; una tirada fallida muestra el desvío y «FALLO».
+- Lluvia de flechas: nueve flechas escalonadas, con arco alto hacia los enemigos afectados.
+- Orbe de fuego: preparación, proyectil con estela y explosión de llamas, limitada por el área válida.
+- Escarcha: proyectil azul, cristales y onda helada.
+- Aliento: llama desde la boca del dracónido y fuego sobre los afectados.
+- Bendición/Luz del alba: luz, aros y destellos de recuperación; marca, furia y poción tienen símbolos/efectos propios.
+
+La vida visible, los números de daño y el resultado detallado aparecen en el punto de impacto, no al comenzar el gesto. Los caídos desaparecen tras su reacción. El estado lógico ya está guardado: cerrar el navegador durante un proyectil no duplica la acción al continuar.
+
+**Pausar relato** congela figura, piernas y proyectiles; **Reanudar** sigue desde esa postura. Cambiar el ritmo conserva el punto alcanzado. Usa **Ritmo: detallado** para apreciar la secuencia. Si el sistema tiene activada la preferencia de movimiento reducido, se muestran efectos estáticos representativos y se evita el desplazamiento animado. Son figuras estilizadas 2D, no modelos 3D ni animaciones cinematográficas; no hay audio todavía.
