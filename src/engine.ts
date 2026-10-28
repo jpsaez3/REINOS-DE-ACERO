@@ -1,4 +1,10 @@
 import {
+  startRecord,
+  finishRecord,
+  zone,
+  type CombatEvent,
+} from "./combat-events";
+import {
   abilities,
   classes,
   classSkills,
@@ -51,6 +57,10 @@ export interface Game {
   seed: number;
   result: "playing" | "victory" | "defeat";
   rewarded: boolean;
+  events?: CombatEvent[];
+  eventSequence?: number;
+  logSequence?: number;
+  aiStage?: "act" | "end";
 }
 export const board = [
   "##############",
@@ -123,6 +133,7 @@ export function roll(g: Game, sides: number): number {
   return 1 + Math.floor((g.seed / 4294967296) * sides);
 }
 function note(g: Game, s: string) {
+  g.logSequence = (g.logSequence ?? 0) + 1;
   g.log.push(s);
   if (g.log.length > 150) g.log.shift();
 }
@@ -321,14 +332,25 @@ export function move(g: Game, p: Pos): boolean {
   if (g.result !== "playing" || u.hp <= 0) return false;
   const path = reachable(g, u).get(`${p.x},${p.y}`);
   if (!path?.length) return false;
+  const recording = startRecord(g);
+  const walked: Pos[] = [];
   for (const step of path) {
+    walked.push(step);
     u.x = step.x;
     u.y = step.y;
     u.move--;
     if (tile(step) === "!") hurt(g, u, 3, "fire");
     if (u.hp <= 0) break;
   }
-  note(g, `${u.name} se mueve ${path.length} casillas.`);
+  note(
+    g,
+    `${u.name} avanza ${walked.length} pasos hasta el ${zone(u)}. Le quedan ${u.move} de movimiento.`,
+  );
+  finishRecord(g, recording, {
+    kind: "move",
+    name: "Desplazamiento",
+    path: walked,
+  });
   outcome(g);
   return true;
 }
@@ -390,21 +412,43 @@ export function use(g: Game, id: string, targetId: string): boolean {
   const u = active(g),
     t = g.units.find((v) => v.id === targetId);
   if (!t || canUse(g, id, t)) return false;
+  const recording = startRecord(g);
   const a = abilities[id];
   if (id === "potion" && u.bonus > 0) u.bonus--;
   else u.action--;
   u.resource -= a.cost;
-  note(g, `${u.name} usa ${a.name}.`);
+  note(
+    g,
+    `${u.name} usa ${a.name}${t.id !== u.id ? " sobre " + t.name : " sobre sí mismo"}.`,
+  );
+  note(
+    g,
+    `Coste: ${id === "potion" && recording.actor.bonus > 0 ? "1 acción adicional" : "1 acción principal"}, ${a.cost} recurso(s). ${a.description}`,
+  );
   if (id === "potion") {
     u.potion--;
     u.inventory = u.inventory.filter((v) => v !== "Poción de curación");
-    u.hp = Math.min(u.maxHp, u.hp + 8);
+    const restored = Math.min(8, u.maxHp - u.hp);
+    u.hp += restored;
+    note(
+      g,
+      `${u.name} bebe una poción y recupera ${restored} PV (${u.hp}/${u.maxHp}).`,
+    );
   } else if (a.effect === "guard" || a.effect === "rage") {
     status(u, a.effect, a.duration + 1);
     if (a.effect === "rage") u.bonus = 1;
+    note(
+      g,
+      a.effect === "guard"
+        ? `${u.name} protege a aliados adyacentes y retiene enemigos próximos hasta terminar su siguiente turno.`
+        : `${u.name} entra en furia: +3 daño físico, resistencia física y −2 defensa; habilita una poción adicional este turno.`,
+    );
   } else if (a.effect === "mark") {
     status(t, "mark", a.duration);
-    note(g, `${t.name} queda expuesto: −2 defensa.`);
+    note(
+      g,
+      `${t.name} queda expuesto: −2 defensa durante ${a.duration} turnos propios.`,
+    );
   } else if (a.effect === "heal") {
     const n = roll(g, 6) + Math.max(0, mod(u.stats.Sabiduría));
     t.hp = Math.min(t.maxHp, t.hp + n);
@@ -434,7 +478,13 @@ export function use(g: Game, id: string, targetId: string): boolean {
           ),
         a.damageType,
       );
-      if (a.effect === "slow") status(v, "slow", a.duration);
+      if (a.effect === "slow") {
+        status(v, "slow", a.duration);
+        note(
+          g,
+          `${v.name} queda ralentizado: −2 movimiento durante ${v.statuses.find((s) => s.kind === "slow")?.turns ?? 0} turnos propios.`,
+        );
+      }
     }
     if (a.healing)
       for (const ally of g.units.filter(
@@ -483,7 +533,13 @@ export function use(g: Game, id: string, targetId: string): boolean {
             ? "radiant"
             : a.damageType,
       );
-      if (a.effect === "root") status(t, "root", a.duration);
+      if (a.effect === "root") {
+        status(t, "root", a.duration);
+        note(
+          g,
+          `${t.name} queda inmovilizado durante ${a.duration} turno(s) propio(s): no puede moverse, pero sí actuar.`,
+        );
+      }
       const protector = g.units.find(
         (v) =>
           v.hp > 0 &&
@@ -499,10 +555,18 @@ export function use(g: Game, id: string, targetId: string): boolean {
       }
     }
   }
+  finishRecord(g, recording, {
+    kind: "ability",
+    name: a.name,
+    abilityId: id,
+    targetId: t.id,
+    targetName: t.name,
+  });
   outcome(g);
   return true;
 }
 function begin(g: Game) {
+  delete g.aiStage;
   const u = active(g);
   u.action = 1;
   u.bonus = 0;
@@ -553,13 +617,14 @@ export function endTurn(g: Game) {
   } while (active(g).hp <= 0);
   begin(g);
 }
-export function aiTurn(g: Game) {
-  const u = active(g);
-  if (u.team !== "enemy" || g.result !== "playing") return;
-  const targets = () =>
-    g.units
-      .filter((v) => v.team !== u.team && v.hp > 0)
-      .sort((a, b) => a.hp + distance(u, a) * 2 - (b.hp + distance(u, b) * 2));
+function enemyTargets(g: Game, u: Unit) {
+  return g.units
+    .filter((v) => v.team !== u.team && v.hp > 0)
+    .sort((a, b) => a.hp + distance(u, a) * 2 - (b.hp + distance(u, b) * 2));
+}
+export function aiDestination(g: Game): Pos {
+  const u = active(g),
+    targets = () => enemyTargets(g, u);
   const paths = reachable(g, u);
   let best: Pos = u,
     score = -Infinity;
@@ -583,20 +648,54 @@ export function aiTurn(g: Game) {
     }
     void key;
   }
-  if (distance(best, u) > 0) move(g, best);
-  if (g.result !== "playing") return;
-  let done = false;
+  return { x: best.x, y: best.y };
+}
+export function aiAction(
+  g: Game,
+): { abilityId: string; targetId: string } | null {
+  const u = active(g);
+  if (u.team !== "enemy" || g.result !== "playing") return null;
+  const targets = enemyTargets(g, u);
   if (u.ai === "caster" || u.ai === "archer") {
-    const skill = u.ai === "caster" ? "frost" : "pin";
-    const t = targets().find((t) => !canUse(g, skill, t));
-    if (t) done = use(g, skill, t.id);
+    const id = u.ai === "caster" ? "frost" : "pin",
+      t = targets.find((t) => !canUse(g, id, t));
+    if (t) return { abilityId: id, targetId: t.id };
   }
-  if (!done) {
-    const t = targets().find((t) => !canUse(g, "attack", t));
-    if (t) done = use(g, "attack", t.id);
+  const target = targets.find((t) => !canUse(g, "attack", t));
+  if (target) return { abilityId: "attack", targetId: target.id };
+  if (u.ai === "fighter" && !has(u, "guard") && !canUse(g, "guard", u))
+    return { abilityId: "guard", targetId: u.id };
+  return null;
+}
+export function aiStep(g: Game) {
+  const u = active(g);
+  if (u.team !== "enemy" || g.result !== "playing") return;
+  if (!g.aiStage) {
+    const p = aiDestination(g);
+    if (distance(p, u) > 0) move(g, p);
+    g.aiStage = "act";
+    return;
   }
-  if (!done && u.ai === "fighter" && !has(u, "guard")) use(g, "guard", u.id);
+  if (g.aiStage === "act") {
+    const plan = aiAction(g);
+    if (plan) use(g, plan.abilityId, plan.targetId);
+    else {
+      const before = startRecord(g);
+      note(
+        g,
+        `${u.name} mantiene la posición: no dispone de una acción válida con sus recursos, alcance y línea de visión actuales.`,
+      );
+      finishRecord(g, before, { kind: "wait", name: "Mantener posición" });
+    }
+    g.aiStage = "end";
+    return;
+  }
   endTurn(g);
+}
+export function aiTurn(g: Game) {
+  const id = active(g).id;
+  for (let i = 0; i < 3 && g.result === "playing" && active(g).id === id; i++)
+    aiStep(g);
 }
 export const save = (g: Game) => JSON.stringify(g);
 export function load(raw: string): Game {
@@ -617,6 +716,25 @@ export function load(raw: string): Game {
     !Array.isArray(g.log)
   )
     throw Error("Guardado incompatible o dañado");
+  if (g.aiStage !== undefined && !["act", "end"].includes(g.aiStage))
+    throw Error("Fase enemiga inválida");
+  if (
+    g.events !== undefined &&
+    (!Array.isArray(g.events) ||
+      g.events.length > 80 ||
+      g.events.some(
+        (e) =>
+          !Number.isInteger(e.id) ||
+          !["move", "ability", "wait"].includes(e.kind) ||
+          !Array.isArray(e.details) ||
+          !Array.isArray(e.effects) ||
+          !Array.isArray(e.path) ||
+          !e.from ||
+          !e.to ||
+          !e.costs,
+      ))
+  )
+    throw Error("Registro de acciones inválido");
   for (const u of g.units) {
     if (
       !classes[u.cls] ||

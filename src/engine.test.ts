@@ -10,6 +10,8 @@ import {
 import {
   active,
   aiTurn,
+  aiStep,
+  aiAction,
   board,
   canUse,
   createUnit,
@@ -485,4 +487,105 @@ it("la previsión de impacto utiliza defensa, cobertura y marca del mismo motor"
   expect(hitChance(g, "attack", t)).toBe(60);
   u.action = 0;
   expect(hitChance(g, "attack", t)).toBe(null);
+});
+
+describe("Relato detallado y turnos rivales por fases", () => {
+  it("registra actor, objetivo, coste, tirada y cambios reales de vida", () => {
+    const { g, u, t } = fixture("Explorador");
+    g.seed = seedFor(20);
+    use(g, "pin", t.id);
+    const e = g.events!.at(-1)!;
+    expect(e.actorId).toBe(u.id);
+    expect(e.targetName).toBe(t.name);
+    expect(e.costs).toMatchObject({ action: 1, resources: 1 });
+    expect(e.details.join(" ")).toContain("CRÍTICO");
+    expect(e.details.join(" ")).toContain(t.name);
+    expect(e.effects.find((v) => v.id === t.id)?.statuses[0].kind).toBe("root");
+    expect(e.effects.find((v) => v.id === t.id)?.hpAfter).toBe(t.hp);
+  });
+  it("distingue fallo de daño y no inventa efectos", () => {
+    const { g, t } = fixture("Guerrero", "Humano");
+    g.seed = seedFor(1);
+    use(g, "attack", t.id);
+    const e = g.events!.at(-1)!;
+    expect(e.details.join(" ")).toContain(": fallo");
+    expect(e.effects).toHaveLength(0);
+  });
+  it("no genera eventos para acciones rechazadas", () => {
+    const { g, u, t } = fixture();
+    u.action = 0;
+    expect(use(g, "attack", t.id)).toBe(false);
+    expect(g.events ?? []).toHaveLength(0);
+  });
+  it("conserva el camino real del desplazamiento sin atravesar muros ni ocupantes", () => {
+    const { g, u } = fixture();
+    const expected = reachable(g, u).get("4,2")!;
+    const from = { x: u.x, y: u.y };
+    move(g, { x: 4, y: 2 });
+    const e = g.events!.at(-1)!;
+    expect(e.kind).toBe("move");
+    expect(e.path).toEqual(expected);
+    expect(e.from).toEqual(from);
+    expect(e.to).toEqual({ x: 4, y: 2 });
+    expect(e.costs.movement).toBe(expected.length);
+  });
+  it("separa movimiento, acción y fin sin repetir la acción", () => {
+    const g = newGame(party(), 2026);
+    g.turn = g.order.indexOf("e2");
+    const enemy = active(g);
+    enemy.move = 6;
+    enemy.action = 1;
+    const id = enemy.id;
+    aiStep(g);
+    expect(active(g).id).toBe(id);
+    expect(g.aiStage).toBe("act");
+    const plan = aiAction(g);
+    expect(plan).not.toBeNull();
+    const copy = load(save(g));
+    aiStep(g);
+    aiStep(copy);
+    expect(copy).toEqual(g);
+    expect(g.aiStage).toBe("end");
+    expect(active(g).action).toBe(0);
+    expect(g.events!.at(-1)?.abilityId).toBe(plan?.abilityId);
+    const count = g.events!.length;
+    aiStep(g);
+    expect(g.events!.length).toBe(count);
+    expect(active(g).id).not.toBe(id);
+    expect(g.aiStage).toBeUndefined();
+  });
+  it("un turno completo y sus tres fases producen el mismo resultado", () => {
+    const a = newGame(party(), 99);
+    a.turn = a.order.indexOf("e3");
+    active(a).move = 4;
+    const b = structuredClone(a);
+    aiTurn(a);
+    aiStep(b);
+    aiStep(b);
+    aiStep(b);
+    expect(a).toEqual(b);
+  });
+  it("mantiene el historial acotado y detalles correctos aunque rote el registro técnico", () => {
+    const { g, u } = fixture();
+    for (let i = 0; i < 90; i++) {
+      u.action = 1;
+      u.resource = 10;
+      use(g, "guard", u.id);
+    }
+    expect(g.events).toHaveLength(80);
+    expect(g.events!.at(-1)!.id).toBe(90);
+    expect(g.events!.at(-1)!.details[0]).toContain("usa Postura protectora");
+    expect(g.log.length).toBeLessThanOrEqual(150);
+  });
+  it("permite continuar un guardado anterior sin eventos ni fases", () => {
+    const { g, u } = fixture();
+    delete g.events;
+    delete g.eventSequence;
+    delete g.logSequence;
+    delete g.aiStage;
+    const old = load(save(g));
+    expect(use(old, "guard", u.id)).toBe(true);
+    expect(old.events![0].id).toBe(1);
+    expect(old.events![0].details.length).toBeGreaterThan(0);
+  });
 });

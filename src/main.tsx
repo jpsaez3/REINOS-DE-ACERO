@@ -14,7 +14,8 @@ import {
 } from "./content";
 import {
   active,
-  aiTurn,
+  aiStep,
+  aiAction,
   board,
   canUse,
   createUnit,
@@ -36,6 +37,8 @@ import {
   type Unit,
 } from "./engine";
 import "./style.css";
+import { ActionStory } from "./ActionStory";
+import type { CombatEvent } from "./combat-events";
 const KEY = "reinos-acero-v1";
 const statusNames: Record<string, string> = {
   guard: "Protección",
@@ -103,9 +106,48 @@ function App() {
     [inspect, setInspect] = useState<string | null>(null),
     [message, setMessage] = useState(""),
     [help, setHelp] = useState(false),
-    [fast, setFast] = useState(false),
+    [fast, setFast] = useState(() => {
+      try {
+        return localStorage.getItem("reinos-fast") === "true";
+      } catch {
+        return false;
+      }
+    }),
     [saved, setSaved] = useState(hasSaved);
   const [hovered, setHovered] = useState<string | null>(null);
+  const [queue, setQueue] = useState<CombatEvent[]>([]);
+  const lastSeen = useRef(0);
+  const [paused, setPaused] = useState(false);
+  const [tactics, setTactics] = useState(false);
+  const [hoverPosition, setHoverPosition] = useState<{
+    x: number;
+    y: number;
+  } | null>(null);
+  useEffect(() => {
+    try {
+      localStorage.setItem("reinos-fast", String(fast));
+    } catch {}
+  }, [fast]);
+  useEffect(() => {
+    const fresh = (g?.events ?? []).filter((e) => e.id > lastSeen.current);
+    if (fresh.length) {
+      lastSeen.current = fresh[fresh.length - 1].id;
+      setQueue((q) => [...q, ...fresh]);
+    }
+  }, [g]);
+  useEffect(() => {
+    if (!queue.length || paused || screen !== "combat") return;
+    const current = queue[0];
+    const ms = fast
+      ? 120
+      : current.kind === "move"
+        ? Math.max(1600, current.path.length * 200)
+        : 3200;
+    const timer = setTimeout(() => setQueue((q) => q.slice(1)), ms);
+    return () => clearTimeout(timer);
+  }, [queue, fast, paused, screen]);
+  const presenting = queue.length > 0;
+
   const [feedback, setFeedback] = useState<
     { id: string; delta: number; key: number }[]
   >([]);
@@ -133,7 +175,7 @@ function App() {
     return () => clearTimeout(timer);
   }, [g]);
   const actor = g ? active(g) : null,
-    player = actor?.team === "party" && g?.result === "playing";
+    player = actor?.team === "party" && g?.result === "playing" && !presenting;
   const change = (fn: (next: Game) => void) => {
     if (!g) return;
     const next = structuredClone(g);
@@ -148,22 +190,28 @@ function App() {
     } catch {
       setMessage("No se pudo guardar: almacenamiento local no disponible.");
     }
-    if (g.result === "playing" && active(g).team === "enemy") {
+    if (
+      screen === "combat" &&
+      !presenting &&
+      !paused &&
+      g.result === "playing" &&
+      active(g).team === "enemy"
+    ) {
       const timer = setTimeout(
         () => {
           setG((old) => {
             if (!old || active(old).team !== "enemy") return old;
             const next = structuredClone(old);
-            aiTurn(next);
+            aiStep(next);
             return next;
           });
           setChosen("attack");
         },
-        fast ? 50 : 650,
+        fast ? 60 : g.aiStage === "end" ? 400 : 1800,
       );
       return () => clearTimeout(timer);
     }
-  }, [g, fast]);
+  }, [g, fast, presenting, paused, screen]);
   function start() {
     const party = draft.map((d, i) =>
       createUnit(
@@ -176,6 +224,10 @@ function App() {
         i + 2,
       ),
     );
+    lastSeen.current = 0;
+    setQueue([]);
+    previous.current = null;
+    setPaused(false);
     setG(newGame(party));
     setChosen("attack");
     setScreen("combat");
@@ -185,7 +237,12 @@ function App() {
     try {
       const raw = localStorage.getItem(KEY);
       if (!raw) throw Error("No hay partida guardada");
-      setG(load(raw));
+      const restored = load(raw);
+      lastSeen.current = restored.events?.at(-1)?.id ?? 0;
+      setQueue([]);
+      previous.current = null;
+      setPaused(false);
+      setG(restored);
       setChosen("attack");
       setScreen("combat");
       setMessage("");
@@ -217,6 +274,23 @@ function App() {
     ["slow", "area"].includes(hoveredAbility.effect)
       ? hoverTarget
       : null;
+  const currentEvent = queue[0] ?? g?.events?.at(-1);
+  const enemyPlan =
+    g && actor?.team === "enemy" && g.aiStage === "act" && !presenting
+      ? aiAction(g)
+      : null;
+  const planTarget = g?.units.find((u) => u.id === enemyPlan?.targetId);
+  const route = hoverPosition
+    ? destinations.get(`${hoverPosition.x},${hoverPosition.y}`)
+    : undefined;
+  const eventActor = g?.units.find((u) => u.id === queue[0]?.actorId);
+  const eventTarget = g?.units.find((u) => u.id === queue[0]?.targetId);
+  const trace =
+    queue[0]?.kind === "move"
+      ? [queue[0].from, ...queue[0].path]
+      : route && actor
+        ? [actor, ...route]
+        : [];
   return (
     <>
       <header>
@@ -244,10 +318,13 @@ function App() {
           <button onClick={() => setHelp(false)}>Cerrar</button>
           <h2>Antes de cruzar el paso</h2>
           <p>
-            Selecciona una habilidad y pulsa un objetivo. Las casillas verdes
-            indican destinos alcanzables: pulsa para moverte. Puedes mover antes
-            o después de tu acción. Solo actúa el personaje resaltado en
-            iniciativa.
+            Selecciona una habilidad y pulsa un objetivo. Pasa el cursor por el
+            escenario para ver una ruta y pulsa para moverte. Activa «Ayudas
+            tácticas» si quieres ver los destinos alcanzables y la cuadrícula.
+            Puedes mover antes o después de actuar; solo actúa el personaje
+            resaltado en iniciativa. Los rivales muestran movimiento, habilidad,
+            objetivo y resultado por separado. Usa «Pausar relato» para leer las
+            tiradas y «Reanudar relato» para continuar.
           </p>
           <p>
             ♜ Pared: bloquea movimiento y visión. ▧ Cobertura: bloquea
@@ -456,14 +533,96 @@ function App() {
                 <span>RUINAS DE LA FRONTERA</span>
                 <span>▧ COBERTURA &nbsp; ♨ PELIGRO</span>
               </div>
-              <div className="action-ribbon" aria-live="polite" key={g.seed}>
-                {g.log
-                  .slice()
-                  .reverse()
-                  .find((s) => /CRÍTICO|fallo|usa /.test(s)) ??
-                  "Observa el terreno y prepara tu primera jugada."}
+              <div className="scene-controls">
+                <label>
+                  <input
+                    type="checkbox"
+                    checked={tactics}
+                    onChange={(e) => setTactics(e.target.checked)}
+                  />{" "}
+                  Ayudas tácticas
+                </label>
+                <button onClick={() => setPaused((p) => !p)}>
+                  {paused ? "Reanudar relato" : "Pausar relato"}
+                </button>
+                <button onClick={() => setFast((f) => !f)}>
+                  {fast ? "Ritmo: rápido" : "Ritmo: detallado"}
+                </button>
               </div>
-              <div className="board" role="grid" aria-label="Tablero táctico">
+              {enemyPlan && planTarget && (
+                <div className="enemy-announcement" role="status">
+                  <span>EL RIVAL PREPARA SU ACCIÓN</span>
+                  <strong>
+                    {actor.name} → {abilities[enemyPlan.abilityId].name}
+                  </strong>
+                  <p>
+                    Objetivo: {planTarget.name}.{" "}
+                    {abilities[enemyPlan.abilityId].description}
+                  </p>
+                </div>
+              )}
+              {actor.team === "enemy" && !g.aiStage && !presenting && (
+                <div className="enemy-announcement" role="status">
+                  <span>TURNO RIVAL</span>
+                  <strong>{actor.name} busca una posición favorable.</strong>
+                  <p>
+                    Primero verás su desplazamiento; después anunciará su
+                    acción.
+                  </p>
+                </div>
+              )}
+
+              <div
+                className={`board scene-board ${tactics ? "tactical-guides" : ""}`}
+                role="grid"
+                aria-label="Tablero táctico"
+              >
+                <svg
+                  className="scene-overlay"
+                  viewBox="0 0 14 10"
+                  aria-hidden="true"
+                >
+                  <defs>
+                    <marker
+                      id="action-arrow"
+                      markerWidth="5"
+                      markerHeight="5"
+                      refX="4"
+                      refY="2.5"
+                      orient="auto"
+                    >
+                      <path d="M0 0 L5 2.5 L0 5" fill="#ffcc85" />
+                    </marker>
+                  </defs>
+                  {trace.length > 1 && (
+                    <polyline
+                      className="movement-trace"
+                      points={trace
+                        .map((p) => `${p.x + 0.5},${p.y + 0.5}`)
+                        .join(" ")}
+                    />
+                  )}
+                  {trace.length > 1 && (
+                    <circle
+                      className="route-end"
+                      cx={trace.at(-1)!.x + 0.5}
+                      cy={trace.at(-1)!.y + 0.5}
+                      r=".19"
+                    />
+                  )}
+                  {eventActor &&
+                    eventTarget &&
+                    eventActor.id !== eventTarget.id && (
+                      <line
+                        className={`action-trace ${queue[0].abilityId ?? ""}`}
+                        x1={eventActor.x + 0.5}
+                        y1={eventActor.y + 0.5}
+                        x2={eventTarget.x + 0.5}
+                        y2={eventTarget.y + 0.5}
+                        markerEnd="url(#action-arrow)"
+                      />
+                    )}
+                </svg>
                 {board.flatMap((row, y) =>
                   [...row].map((t, x) => {
                     const u = g.units.find(
@@ -485,7 +644,7 @@ function App() {
                         role="gridcell"
                         aria-label={`${x},${y}${u ? " " + u.name : ""}`}
                         key={`${x},${y}`}
-                        className={`tile ${t === "#" ? "wall" : t === "c" ? "cover" : t === "!" ? "hazard" : ""} ${canMove ? "reachable" : ""} ${u ? u.team : ""} ${u?.id === actor.id ? "selected" : ""} ${validTarget ? "valid-target" : ""} ${inArea ? "area-preview" : ""} ${effect ? (effect.delta < 0 ? "struck" : "restored") : ""}`}
+                        className={`tile ${t === "#" ? "wall" : t === "c" ? "cover" : t === "!" ? "hazard" : ""} ${canMove ? "reachable" : ""} ${u ? u.team : ""} ${u?.id === actor.id ? "selected" : ""} ${validTarget ? "valid-target" : ""} ${inArea ? "area-preview" : ""} ${effect ? (effect.delta < 0 ? "struck" : "restored") : ""} ${queue[0]?.actorId === u?.id && u ? "event-source" : ""} ${queue[0]?.targetId === u?.id && u ? "event-target" : ""}`}
                         title={
                           u
                             ? `${u.name} · ${u.hp}/${u.maxHp} PV · defensa ${defense(g, u, actor)}${canUse(g, chosen, u) ? " · " + canUse(g, chosen, u) : " · objetivo válido"}`
@@ -497,10 +656,22 @@ function App() {
                                   ? "Brasas: 3 daño al entrar"
                                   : `Casilla ${x},${y}`
                         }
-                        onMouseEnter={() => setHovered(u?.id ?? null)}
-                        onMouseLeave={() => setHovered(null)}
-                        onFocus={() => setHovered(u?.id ?? null)}
-                        onBlur={() => setHovered(null)}
+                        onMouseEnter={() => {
+                          setHovered(u?.id ?? null);
+                          setHoverPosition({ x, y });
+                        }}
+                        onMouseLeave={() => {
+                          setHovered(null);
+                          setHoverPosition(null);
+                        }}
+                        onFocus={() => {
+                          setHovered(u?.id ?? null);
+                          setHoverPosition({ x, y });
+                        }}
+                        onBlur={() => {
+                          setHovered(null);
+                          setHoverPosition(null);
+                        }}
                         onContextMenu={(e) => {
                           e.preventDefault();
                           if (u) setInspect(u.id);
@@ -570,103 +741,117 @@ function App() {
               </div>
               <div className="map-bar">
                 <span>Click: mover / objetivo · Click derecho: ficha</span>
-                <span>VERDE: ALCANCE DE MOVIMIENTO</span>
+                <span>PASA EL CURSOR POR UN DESTINO PARA VER LA RUTA</span>
               </div>
             </section>
             <aside className="sidebar">
-              <section className="card actor">
-                <div className="eyebrow">
-                  {player ? "TU TURNO" : "TURNO ENEMIGO"}
-                </div>
-                <div className="actor-heading">
-                  <Portrait cls={actor.cls} enemy={actor.team === "enemy"} />
-                  <h2>{actor.name}</h2>
-                </div>
-                <p>
-                  {actor.race} · {actor.cls} · Nivel {actor.level}
-                </p>
-                <progress value={actor.hp} max={actor.maxHp} />
-                <p>
-                  {actor.hp} / {actor.maxHp} PV
-                </p>
-                <div className="meters">
-                  <span>
-                    <b>{actor.move}</b> Movimiento
-                  </span>
-                  <span>
-                    <b>{actor.action}</b> Acción
-                  </span>
-                  <span>
-                    <b>{actor.resource}</b> Recursos
-                  </span>
-                </div>
-                <p className="hint">
-                  {actor.statuses
-                    .map((s) => `${statusNames[s.kind]} (${s.turns})`)
-                    .join(" · ") || "Sin estados alterados"}
-                </p>
-                <div className="actions">
-                  {[
-                    "attack",
-                    ...classSkills(actor.cls),
-                    ...(actor.race === "Dracónido" ? ["breath"] : []),
-                    "potion",
-                  ].map((id) => (
+              {currentEvent &&
+                (presenting ? (
+                  <ActionStory event={currentEvent} playing />
+                ) : (
+                  <details className="last-action">
+                    <summary>
+                      Última acción: {currentEvent.actorName} ·{" "}
+                      {currentEvent.name}
+                    </summary>
+                    <ActionStory event={currentEvent} />
+                  </details>
+                ))}
+              {actor.team === "party" && !presenting && (
+                <>
+                  <section className="card actor">
+                    <div className="eyebrow">TU TURNO</div>
+                    <div className="actor-heading">
+                      <Portrait cls={actor.cls} />
+                      <h2>{actor.name}</h2>
+                    </div>
+                    <p>
+                      {actor.race} · {actor.cls} · Nivel {actor.level}
+                    </p>
+                    <progress value={actor.hp} max={actor.maxHp} />
+                    <p>
+                      {actor.hp} / {actor.maxHp} PV
+                    </p>
+                    <div className="meters">
+                      <span>
+                        <b>{actor.move}</b> Movimiento
+                      </span>
+                      <span>
+                        <b>{actor.action}</b> Acción
+                      </span>
+                      <span>
+                        <b>{actor.resource}</b> Recursos
+                      </span>
+                    </div>
+                    <p className="hint">
+                      {actor.statuses
+                        .map((s) => `${statusNames[s.kind]} (${s.turns})`)
+                        .join(" · ") || "Sin estados alterados"}
+                    </p>
+                    <div className="actions">
+                      {[
+                        "attack",
+                        ...classSkills(actor.cls),
+                        ...(actor.race === "Dracónido" ? ["breath"] : []),
+                        "potion",
+                      ].map((id) => (
+                        <button
+                          disabled={!player}
+                          className={chosen === id ? "active" : ""}
+                          key={id}
+                          title={`${abilities[id].description} Coste: ${abilities[id].cost} recurso(s). ${abilities[id].condition}`}
+                          onClick={() => {
+                            setChosen(id);
+                            setMessage("");
+                            if (abilities[id].target === "self") {
+                              const err = canUse(g, id, actor);
+                              if (err) setMessage(err);
+                              else change((n) => use(n, id, actor.id));
+                            }
+                          }}
+                        >
+                          {abilities[id].name}
+                          <small>
+                            {id === "potion"
+                              ? `${actor.potion} disponible`
+                              : `${abilities[id].cost} recurso · ${id === "attack" ? classes[actor.cls].range : abilities[id].range} alcance`}
+                          </small>
+                        </button>
+                      ))}
+                    </div>
+                    <p className="hint chosen-description">
+                      {abilities[chosen].description}
+                    </p>
+                    {hoverTarget && (
+                      <div className="target-preview" role="status">
+                        <strong>{hoverTarget.name}</strong>
+                        <span>
+                          {hoverTarget.hp}/{hoverTarget.maxHp} PV · Defensa{" "}
+                          {defense(g, hoverTarget, actor)}
+                        </span>
+                        <b>
+                          {hitChance(g, chosen, hoverTarget) === null
+                            ? canUse(g, chosen, hoverTarget)
+                            : `${hitChance(g, chosen, hoverTarget)}% ${["damage", "root"].includes(abilities[chosen].effect) ? "de impacto (sin suerte racial)" : "efecto directo"}`}
+                        </b>
+                      </div>
+                    )}
                     <button
+                      className="primary end"
                       disabled={!player}
-                      className={chosen === id ? "active" : ""}
-                      key={id}
-                      title={`${abilities[id].description} Coste: ${abilities[id].cost} recurso(s). ${abilities[id].condition}`}
                       onClick={() => {
-                        setChosen(id);
-                        setMessage("");
-                        if (abilities[id].target === "self") {
-                          const err = canUse(g, id, actor);
-                          if (err) setMessage(err);
-                          else change((n) => use(n, id, actor.id));
-                        }
+                        change(endTurn);
+                        setChosen("attack");
                       }}
                     >
-                      {abilities[id].name}
-                      <small>
-                        {id === "potion"
-                          ? `${actor.potion} disponible`
-                          : `${abilities[id].cost} recurso · ${id === "attack" ? classes[actor.cls].range : abilities[id].range} alcance`}
-                      </small>
+                      Finalizar turno →
                     </button>
-                  ))}
-                </div>
-                <p className="hint chosen-description">
-                  {abilities[chosen].description}
-                </p>
-                {hoverTarget && (
-                  <div className="target-preview" role="status">
-                    <strong>{hoverTarget.name}</strong>
-                    <span>
-                      {hoverTarget.hp}/{hoverTarget.maxHp} PV · Defensa{" "}
-                      {defense(g, hoverTarget, actor)}
-                    </span>
-                    <b>
-                      {hitChance(g, chosen, hoverTarget) === null
-                        ? canUse(g, chosen, hoverTarget)
-                        : `${hitChance(g, chosen, hoverTarget)}% ${["damage", "root"].includes(abilities[chosen].effect) ? "de impacto (sin suerte racial)" : "efecto directo"}`}
-                    </b>
-                  </div>
-                )}
-                <button
-                  className="primary end"
-                  disabled={!player}
-                  onClick={() => {
-                    change(endTurn);
-                    setChosen("attack");
-                  }}
-                >
-                  Finalizar turno →
-                </button>
-                <button onClick={() => setInspect(actor.id)}>
-                  Consultar ficha
-                </button>
-              </section>
+                    <button onClick={() => setInspect(actor.id)}>
+                      Consultar ficha
+                    </button>
+                  </section>
+                </>
+              )}
               <section className="card intentions">
                 <div className="eyebrow">LEE EL CAMPO DE BATALLA</div>
                 {g.units
@@ -685,42 +870,64 @@ function App() {
                   al moverse.
                 </p>
               </section>
-              <section className="card log">
-                <div className="eyebrow">REGISTRO DE COMBATE</div>
+              <section className="card log action-journal">
+                <div className="eyebrow">HISTORIAL DE ACCIONES</div>
                 <div role="log">
-                  {g.log
-                    .slice(-20)
+                  {(g.events ?? [])
+                    .slice(-12)
                     .reverse()
-                    .map((s, i) => (
-                      <p key={g.log.length - i}>{s}</p>
+                    .map((event) => (
+                      <details key={event.id}>
+                        <summary>
+                          <span>{event.actorName}</span>
+                          <strong>{event.name}</strong>
+                          <small>
+                            {event.targetName
+                              ? `→ ${event.targetName}`
+                              : `Ronda ${event.round}`}
+                          </small>
+                        </summary>
+                        <ActionStory event={event} />
+                      </details>
                     ))}
                 </div>
+                <details className="technical-log">
+                  <summary>Registro técnico completo</summary>
+                  {g.log.slice(-60).map((s, i) => (
+                    <p key={i}>{s}</p>
+                  ))}
+                </details>
               </section>
             </aside>
           </div>
-          {g.result !== "playing" && (
-            <div className="overlay">
-              <section className="modal">
-                <div className="eyebrow">EXPEDICIÓN CONCLUIDA</div>
-                <h1>
-                  {g.result === "victory"
-                    ? "El paso es vuestro."
-                    : "El acero ha caído."}
-                </h1>
-                <p>
-                  {g.result === "victory"
-                    ? "Victoria. Cada aventurero recibe 100 PX y +4 PV al alcanzar nivel 2."
-                    : "Derrota. Prueba otra composición y utiliza las coberturas para proteger al grupo."}
-                </p>
-                <button className="primary" onClick={() => setScreen("create")}>
-                  Preparar otra expedición
-                </button>
-                <button onClick={() => setScreen("menu")}>
-                  Menú principal
-                </button>
-              </section>
-            </div>
-          )}
+          {g.result !== "playing" &&
+            !presenting &&
+            !(g.events ?? []).some((e) => e.id > lastSeen.current) && (
+              <div className="overlay">
+                <section className="modal">
+                  <div className="eyebrow">EXPEDICIÓN CONCLUIDA</div>
+                  <h1>
+                    {g.result === "victory"
+                      ? "El paso es vuestro."
+                      : "El acero ha caído."}
+                  </h1>
+                  <p>
+                    {g.result === "victory"
+                      ? "Victoria. Cada aventurero recibe 100 PX y +4 PV al alcanzar nivel 2."
+                      : "Derrota. Prueba otra composición y utiliza las coberturas para proteger al grupo."}
+                  </p>
+                  <button
+                    className="primary"
+                    onClick={() => setScreen("create")}
+                  >
+                    Preparar otra expedición
+                  </button>
+                  <button onClick={() => setScreen("menu")}>
+                    Menú principal
+                  </button>
+                </section>
+              </div>
+            )}
         </main>
       )}
       {viewed && (

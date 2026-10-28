@@ -99,3 +99,9 @@ Cada clase dispone también de una segunda habilidad. Comparte la misma acción 
 Las áreas requieren visión hacia el centro y desde el centro a cada afectado. No atraviesan paredes ni dañan aliados; no utilizan la defensa del objetivo y no producen críticos. Cada afectado recibe su propio dado de daño. En cambio, Golpe de escudo hace una tirada de ataque normal.
 
 La interfaz ilumina los objetivos legales para la acción elegida. Pasar sobre un objetivo muestra defensa efectiva y probabilidad base de impacto (incluye críticos y fallo natural, no incluye la repetición de suerte mediana). Efectos directos muestran 100% cuando son legales. Las áreas se previsualizan al pasar sobre un centro válido. Las pistas enemigas son orientativas: la IA vuelve a evaluar después de moverse; no son acciones bloqueadas o garantizadas.
+
+## Presentación por fases y cuadrícula oculta
+
+El escenario continuo es una representación visual del mismo tablero ortogonal. Ocultar sus líneas no cambia el movimiento, la distancia, las paredes ni las coberturas. Las ayudas tácticas se pueden activar para consultar la geometría exacta. Los trazos de ruta muestran el camino real utilizado por la búsqueda de caminos.
+
+La IA conserva su estrategia y economía: ahora resuelve desplazamiento, acción y fin de turno en pasos separados. La habilidad anunciada después del desplazamiento se calcula con el mismo selector que la ejecuta. Cada paso resuelto se guarda antes de avanzar al siguiente. La pausa y el ritmo solo afectan a la presentación; no consumen recursos ni repiten tiradas. No se permite realizar otra acción durante la presentación de la anterior.
