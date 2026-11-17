@@ -20,7 +20,12 @@ try {
     path: "/tmp/reinos-menu-ilustrado.png",
     fullPage: true,
   });
-  for (const name of ["heroes.png", "paso-ceniza.png", "terrain.png"]) {
+  for (const name of [
+    "characters/humano.png",
+    "characters/enano.png",
+    "paso-ceniza.png",
+    "terrain.png",
+  ]) {
     const loaded = await page.evaluate(async (name) => {
       const image = new Image();
       image.src = "/art/" + name;

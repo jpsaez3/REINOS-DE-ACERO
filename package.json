@@ -10,7 +10,8 @@
     "test:e2e": "node e2e/play.mjs",
     "test:visual": "node e2e/illustrated.mjs",
     "test:narration": "node e2e/narration.mjs",
-    "test:animation": "node e2e/animation.mjs"
+    "test:animation": "node e2e/animation.mjs",
+    "test:art": "node e2e/art.mjs"
   },
   "dependencies": {
     "react": "^19.2.0",

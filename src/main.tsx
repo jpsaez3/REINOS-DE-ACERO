@@ -38,6 +38,7 @@ import {
 } from "./engine";
 import "./style.css";
 import { ActionStory } from "./ActionStory";
+import { Portrait } from "./Portrait";
 import { CombatScene } from "./CombatScene";
 import { usePlayback, useReducedMotion } from "./usePlayback";
 import { effectFor, impactPoint } from "./animation";
@@ -66,32 +67,6 @@ const symbols: Record<Class, string> = {
   Clérigo: "✚",
   Explorador: "➶",
 };
-const portraitCells: Record<Class, [number, number]> = {
-  Guerrero: [0, 0],
-  Bárbaro: [1, 0],
-  Pícaro: [2, 0],
-  Mago: [0, 1],
-  Clérigo: [1, 1],
-  Explorador: [2, 1],
-};
-function Portrait({
-  cls,
-  large = false,
-  enemy = false,
-}: {
-  cls: Class;
-  large?: boolean;
-  enemy?: boolean;
-}) {
-  const [x, y] = portraitCells[cls];
-  return (
-    <span
-      aria-hidden="true"
-      className={`portrait ${large ? "large" : ""} ${enemy ? "foe" : ""}`}
-      style={{ backgroundPosition: `${x * 50}% ${y * (large ? 100 : 75)}%` }}
-    />
-  );
-}
 type Draft = { name: string; race: Race; cls: Class; stats: Stats };
 const initial: Draft[] = (
   ["Guerrero", "Pícaro", "Mago", "Clérigo"] as Class[]
@@ -117,6 +92,7 @@ function App() {
       }
     }),
     [saved, setSaved] = useState(hasSaved);
+  const [artPicker, setArtPicker] = useState<number | null>(null);
   const [hovered, setHovered] = useState<string | null>(null);
   const [queue, setQueue] = useState<CombatEvent[]>([]);
   const lastSeen = useRef(0);
@@ -394,7 +370,13 @@ function App() {
                 <div className="eyebrow">
                   AVENTURERO 0{i + 1} <span>{symbols[d.cls]}</span>
                 </div>
-                <Portrait cls={d.cls} large />
+                <Portrait race={d.race} cls={d.cls} large />
+                <button
+                  className="open-art-picker"
+                  onClick={() => setArtPicker(i)}
+                >
+                  Elegir por retrato
+                </button>
                 <label>
                   Nombre
                   <input
@@ -499,7 +481,11 @@ function App() {
                   className={`${actor.id === id ? "current" : ""} ${displayHp(u) <= 0 ? "dead" : ""} ${u.team}`}
                   onClick={() => setInspect(id)}
                 >
-                  <Portrait cls={u.cls} enemy={u.team === "enemy"} />
+                  <Portrait
+                    race={u.race}
+                    cls={u.cls}
+                    enemy={u.team === "enemy"}
+                  />
                   {u.name}
                   <small>
                     {u.initiative} INI · {displayHp(u)} PV
@@ -692,7 +678,7 @@ function App() {
                   <section className="card actor">
                     <div className="eyebrow">TU TURNO</div>
                     <div className="actor-heading">
-                      <Portrait cls={actor.cls} />
+                      <Portrait race={actor.race} cls={actor.cls} />
                       <h2>{actor.name}</h2>
                     </div>
                     <p>
@@ -788,7 +774,7 @@ function App() {
                   .filter((u) => u.team === "enemy" && u.hp > 0)
                   .map((u) => (
                     <div key={u.id}>
-                      <Portrait cls={u.cls} enemy />
+                      <Portrait race={u.race} cls={u.cls} enemy />
                       <p>
                         <strong>{u.name}</strong>
                         <small>{enemyIntent(g, u)}</small>
@@ -865,6 +851,53 @@ function App() {
             )}
         </main>
       )}
+      {artPicker !== null && (
+        <div className="overlay art-picker-overlay">
+          <section
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="art-picker-title"
+            className="modal art-picker"
+          >
+            <div className="art-picker-heading">
+              <div>
+                <div className="eyebrow">36 COMBINACIONES · ARTE PROPIO</div>
+                <h2 id="art-picker-title">Elige raza y clase</h2>
+                <p>
+                  Personaje: {draft[artPicker].name}. Todas las combinaciones
+                  son válidas.
+                </p>
+              </div>
+              <button onClick={() => setArtPicker(null)}>
+                Cerrar galería ×
+              </button>
+            </div>
+            <div className="art-gallery">
+              {(Object.keys(races) as Race[]).flatMap((race) =>
+                (Object.keys(classes) as Class[]).map((cls) => (
+                  <button
+                    key={`${race}-${cls}`}
+                    aria-label={`Elegir ${race} ${cls}`}
+                    onClick={() => {
+                      const d = draft[artPicker];
+                      edit(artPicker, {
+                        race,
+                        cls,
+                        stats: d.cls === cls ? d.stats : defaultStats(cls),
+                      });
+                      setArtPicker(null);
+                    }}
+                  >
+                    <Portrait race={race} cls={cls} large />
+                    <strong>{race}</strong>
+                    <span>{cls}</span>
+                  </button>
+                )),
+              )}
+            </div>
+          </section>
+        </div>
+      )}
       {viewed && (
         <div className="overlay">
           <section className="modal sheet">
@@ -872,7 +905,12 @@ function App() {
               Cerrar ×
             </button>
             <div className="eyebrow">FICHA DE PERSONAJE</div>
-            <Portrait cls={viewed.cls} large enemy={viewed.team === "enemy"} />
+            <Portrait
+              race={viewed.race}
+              cls={viewed.cls}
+              large
+              enemy={viewed.team === "enemy"}
+            />
             <h1>
               {symbols[viewed.cls]} {viewed.name}
             </h1>

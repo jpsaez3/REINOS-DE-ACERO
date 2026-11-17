@@ -13,6 +13,7 @@ import {
   type ActionEffect,
 } from "./animation";
 import { Miniature } from "./Miniature";
+const smoothTravel = (t: number) => t * t * (3 - 2 * t);
 const center = (p: Pos): Pos => ({ x: p.x + 0.5, y: p.y + 0.5 });
 const pathText = (p: Pos[]) => p.map((v) => `${v.x},${v.y}`).join(" ");
 function Arrow({
@@ -39,18 +40,18 @@ function Arrow({
       data-y={point.y.toFixed(3)}
       transform={`translate(${point.x},${point.y}) rotate(${angle})`}
     >
-      <path d="M-.38 0 H.15" stroke="#e6c294" strokeWidth=".032" />
-      <path
-        d="M.15 0 L.03 -.07 L.22 0 L.03 .07Z"
-        fill="#dedfce"
-        stroke="#39473b"
-        strokeWidth=".012"
-      />
-      <path
-        d="M-.27 0 L-.38 -.06 M-.27 0 L-.38 .06"
-        stroke="#dcaa7b"
-        strokeWidth=".04"
-      />
+      <path d="M-.7 0 L-.25 0" stroke="url(#arrow-trail)" strokeWidth=".022" />
+      <svg
+        className="painted-arrow"
+        x="-.46"
+        y="-.043"
+        width=".75"
+        height=".086"
+        viewBox="45 242 2094 246"
+        preserveAspectRatio="none"
+      >
+        <image href="/art/arrow.png" width="2172" height="724" />
+      </svg>
     </g>
   );
 }
@@ -84,6 +85,27 @@ function Burst({
       opacity={alpha}
       transform={`translate(${at.x},${at.y})`}
     >
+      {kind === "fire" && (
+        <g>
+          <ellipse
+            cy=".04"
+            rx={0.4 + t * 0.45}
+            ry={0.17 + t * 0.2}
+            fill="url(#fire-glow)"
+          />
+          {[0, 1, 2, 3].map((i) => (
+            <ellipse
+              key={i}
+              cx={Math.sin(i * 2.4) * (0.12 + t * 0.35)}
+              cy={-0.1 - t * 0.7 - i * 0.06}
+              rx={0.12 + t * 0.18}
+              ry={0.1 + t * 0.22}
+              fill="url(#smoke-soft)"
+              opacity={t * 0.7}
+            />
+          ))}
+        </g>
+      )}
       <ellipse
         rx={0.22 + t * 0.65}
         ry={0.12 + t * 0.32}
@@ -101,7 +123,7 @@ function Burst({
             <path
               key={i}
               d={`M${x - 0.08} ${y + 0.12} Q${x - 0.17} ${y - 0.12} ${x + 0.03} ${y - 0.35 - (i % 3) * 0.08} Q${x + 0.02} ${y - 0.03} ${x + 0.1} ${y - 0.15} Q${x + 0.2} ${y + 0.04} ${x - 0.08} ${y + 0.12}`}
-              fill={i % 2 ? "#ff8c31" : "#ffdb75"}
+              fill={i % 2 ? "url(#flame-amber)" : "url(#flame-white)"}
               opacity={0.9 - (i % 3) * 0.15}
             />
           );
@@ -110,7 +132,7 @@ function Burst({
             <path
               key={i}
               d={`M${x} ${y - 0.3} L${x + 0.09} ${y} L${x} ${y + 0.12} L${x - 0.06} ${y}Z`}
-              fill="#c2efff"
+              fill="url(#ice-facet)"
               stroke="#f3ffff"
               strokeWidth=".015"
             />
@@ -205,7 +227,11 @@ function SpellEffects({
               cx={launch.x}
               cy={launch.y}
               r={0.06 + phase(progress, 0, 0.2) * 0.12}
-              fill={tint}
+              fill={
+                ["fireball", "firebolt", "breath"].includes(kind)
+                  ? "url(#fire-core)"
+                  : tint
+              }
             />
             <circle
               cx={launch.x}
@@ -267,7 +293,13 @@ function SpellEffects({
             })}
             <circle
               r={kind === "fireball" ? 0.17 : 0.09}
-              fill={kind === "frost" ? "#dbf8ff" : "#fff1ad"}
+              fill={
+                kind === "frost"
+                  ? "url(#ice-facet)"
+                  : kind === "radiant"
+                    ? "#fff1ad"
+                    : "url(#fire-core)"
+              }
             />
           </g>
         )}
@@ -486,7 +518,7 @@ export function CombatScene({
           const sample = samplePath(
             event.from,
             event.path,
-            reduced ? 1 : phase(progress, 0.05, 0.9),
+            reduced ? 1 : smoothTravel(phase(progress, 0.05, 0.9)),
           );
           p = sample;
           dx = sample.dx;
@@ -529,7 +561,53 @@ export function CombatScene({
       data-reduced-motion={reduced}
     >
       <defs>
+        <linearGradient id="arrow-trail">
+          <stop stopColor="#e1cfaa" stopOpacity="0" />
+          <stop offset="1" stopColor="#e1cfaa" stopOpacity=".3" />
+        </linearGradient>
+        <radialGradient id="fire-core">
+          <stop stopColor="#ffffed" />
+          <stop offset=".25" stopColor="#fff2a2" />
+          <stop offset=".58" stopColor="#ffb535" />
+          <stop offset=".85" stopColor="#e65916" />
+          <stop offset="1" stopColor="#b73712" stopOpacity=".3" />
+        </radialGradient>
+        <radialGradient id="fire-glow">
+          <stop stopColor="#ffd87d" stopOpacity=".8" />
+          <stop offset=".45" stopColor="#ff9c31" stopOpacity=".45" />
+          <stop offset="1" stopColor="#f06520" stopOpacity="0" />
+        </radialGradient>
+        <linearGradient id="flame-amber" x1="0" y1="1" x2=".35" y2="0">
+          <stop stopColor="#fff0ac" />
+          <stop offset=".38" stopColor="#ffc053" />
+          <stop offset=".7" stopColor="#e66a20" />
+          <stop offset="1" stopColor="#9e3b1e" stopOpacity=".2" />
+        </linearGradient>
+        <linearGradient id="flame-white" x1="0" y1="1" x2=".3" y2="0">
+          <stop stopColor="#fffde0" />
+          <stop offset=".4" stopColor="#ffe48b" />
+          <stop offset=".8" stopColor="#f49c36" />
+          <stop offset="1" stopColor="#b5531d" stopOpacity="0" />
+        </linearGradient>
+        <radialGradient id="smoke-soft">
+          <stop stopColor="#332d25" stopOpacity=".55" />
+          <stop offset="1" stopColor="#504936" stopOpacity="0" />
+        </radialGradient>
+        <linearGradient id="ice-facet" x1="0" y1="0" x2="1" y2="1">
+          <stop stopColor="#f8ffff" />
+          <stop offset=".42" stopColor="#c6eff7" />
+          <stop offset=".5" stopColor="#77b5cd" />
+          <stop offset=".72" stopColor="#d7f7ff" />
+          <stop offset="1" stopColor="#5b8da9" stopOpacity=".65" />
+        </linearGradient>
         <filter id="mini-shadow" x="-40%" y="-40%" width="180%" height="180%">
+          <feDropShadow
+            dx="0"
+            dy="0"
+            stdDeviation=".009"
+            floodColor="#f9e4bb"
+            floodOpacity=".4"
+          />
           <feDropShadow
             dx="0"
             dy=".025"
@@ -603,7 +681,7 @@ export function CombatScene({
               </g>
             )}
             <g
-              transform="translate(-.37,-.65) scale(.0074)"
+              transform="translate(-.4,-.7) scale(.008)"
               filter="url(#mini-shadow)"
             >
               <Miniature

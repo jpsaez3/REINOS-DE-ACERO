@@ -19,6 +19,7 @@ npm run build    # comprobación TypeScript y compilación de producción
 npm run test:visual # arte, áreas, recursos y daño en Chromium
 npm run test:narration # fases rivales, pausa, detalles y recuperación
 npm run test:animation # caminar, flechas, magia, impacto y pausa
+npm run test:art # las 36 combinaciones, píxeles distintos y coherencia visual
 npm run test:e2e # Chromium instalado en /usr/bin/chromium; Vite debe estar en puerto 5173
 ```
 
@@ -46,7 +47,8 @@ Se guarda automáticamente después de cada cambio, incluidos turnos enemigos y 
 - `src/main.tsx`: menú, creación, combate, configuración, ficha y secuencia visual.
 - `src/combat-events.ts`: hechos estructurados, costes y efectos de cada acción.
 - `src/ActionStory.tsx`: relato legible y resolución técnica de las acciones.
-- `src/Miniature.tsx`, `src/CombatScene.tsx`: figuras 2D articuladas y efectos.
+- `src/character-art.ts`, `src/Portrait.tsx`: catálogo de las 36 combinaciones y recortes de sus retratos.
+- `src/Miniature.tsx`, `src/CombatScene.tsx`: figuras pintadas articuladas y efectos.
 - `src/animation.ts`, `src/usePlayback.ts`: trayectorias y reloj visual pausable.
 - `src/style.css`: diseño adaptable; símbolos y fuentes locales, sin recursos externos.
 - `src/engine.test.ts`: pruebas de reglas y simulaciones completas.
@@ -60,7 +62,7 @@ Un tablero, tres enemigos, dos habilidades por clase más ataque básico y poci�
 
 ## Edición ilustrada
 
-Incluye retratos pintados, ilustración del Paso Ceniza, figuras articuladas en el escenario y retratos con marcos de facción en la interfaz, escenario de ruinas pintado como una imagen continua, indicadores de estado, daño y curación animados y avisos de las últimas acciones. Todo el arte está incluido en `public/art`; no se descarga de terceros al jugar. Los retratos representan seis arquetipos de clase y se reutilizan para las combinaciones de raza/clase y enemigos; todavía no existe un retrato único por combinación. Las preferencias del sistema para reducir movimiento se respetan.
+Incluye retratos pintados, ilustración del Paso Ceniza, figuras articuladas en el escenario y retratos con marcos de facción en la interfaz, escenario de ruinas pintado como una imagen continua, indicadores de estado, daño y curación animados y avisos de las últimas acciones. Todo el arte está incluido en `public/art`; no se descarga de terceros al jugar. Cada una de las 36 combinaciones de raza y clase tiene retrato y figura pintados propios; los enemigos usan también su combinación real. Las preferencias del sistema para reducir movimiento se respetan.
 
 Cada clase dispone de **dos habilidades** además del ataque básico; el coste de las áreas nuevas obliga a elegir cómo gastar los recursos. Puedes consultar la probabilidad de impacto, previsualizar áreas y leer pistas de las intenciones enemigas. Consulta el añadido al final de REGLAS.md para los costes y efectos exactos. Las partidas anteriores conservan compatibilidad; las nuevas habilidades se obtienen al actualizar la aplicación.
 
@@ -78,7 +80,7 @@ Los guardados anteriores siguen siendo compatibles. Guardar y recargar a mitad d
 
 ## Animaciones de personajes y habilidades
 
-En el escenario se ven figuras 2D vectoriales, con equipo por clase y diferencias de proporción/rasgos por raza. Los retratos pintados se conservan en iniciativa y fichas. Al caminar, la figura recorre cada tramo del camino real, alterna piernas y brazos y levanta algo de polvo. Los ataques cuerpo a cuerpo muestran un avance y un gesto de arma; el escudo se levanta para proteger o golpear.
+En el escenario se ven figuras 2D pintadas, con una ilustración específica para cada combinación de raza y clase. Los retratos pintados se conservan en iniciativa y fichas. Al caminar, la figura recorre cada tramo del camino real, alterna piernas y brazos y levanta algo de polvo. Los ataques cuerpo a cuerpo muestran un avance y un gesto de arma; el escudo se levanta para proteger o golpear.
 
 - Arco/disparo de sujeción: flecha en vuelo y destello al impactar; una tirada fallida muestra el desvío y «FALLO».
 - Lluvia de flechas: nueve flechas escalonadas, con arco alto hacia los enemigos afectados.
@@ -89,4 +91,12 @@ En el escenario se ven figuras 2D vectoriales, con equipo por clase y diferencia
 
 La vida visible, los números de daño y el resultado detallado aparecen en el punto de impacto, no al comenzar el gesto. Los caídos desaparecen tras su reacción. El estado lógico ya está guardado: cerrar el navegador durante un proyectil no duplica la acción al continuar.
 
-**Pausar relato** congela figura, piernas y proyectiles; **Reanudar** sigue desde esa postura. Cambiar el ritmo conserva el punto alcanzado. Usa **Ritmo: detallado** para apreciar la secuencia. Si el sistema tiene activada la preferencia de movimiento reducido, se muestran efectos estáticos representativos y se evita el desplazamiento animado. Son figuras estilizadas 2D, no modelos 3D ni animaciones cinematográficas; no hay audio todavía.
+**Pausar relato** congela figura, piernas y proyectiles; **Reanudar** sigue desde esa postura. Cambiar el ritmo conserva el punto alcanzado. Usa **Ritmo: detallado** para apreciar la secuencia. Si el sistema tiene activada la preferencia de movimiento reducido, se muestran efectos estáticos representativos y se evita el desplazamiento animado. Son ilustraciones pintadas 2D articuladas mediante recortes, no modelos 3D ni animaciones cinematográficas; no hay audio todavía.
+
+## Elegir por retrato y nueva calidad gráfica
+
+En la creación del grupo, **Elegir por retrato** abre una galería con las 36 combinaciones. Elegir una actualiza raza, clase e imagen; cambiar de raza conservando la clase mantiene los atributos distribuidos. Si cambia la clase se restaura su distribución recomendada, igual que con el selector de clase. También puedes seguir usando los desplegables.
+
+El humano mago y el enano mago tienen caras, proporciones y figuras diferentes; el elfo bárbaro y el orco bárbaro también. La misma combinación se mantiene en creación, iniciativa, ficha, pistas enemigas y combate. Los personajes que repiten exactamente raza y clase comparten esa ilustración: no hay todavía un editor de rostro, sexo o peinado.
+
+Las figuras del escenario utilizan el arte pintado del catálogo, con recortes articulados, movimiento más suave al arrancar y detenerse, y proporciones cortas para enanos/medianos. Las flechas ahora tienen textura pintada de madera, plumas y metal. Fuego e hielo incorporan volumen de luz, degradados y humo para integrarse mejor con el escenario. Los resultados y los costes de las acciones no han cambiado.

@@ -7,6 +7,7 @@ import {
 import {
   abilities,
   classes,
+  races,
   classSkills,
   defaultStats,
   pointCost,
@@ -738,6 +739,7 @@ export function load(raw: string): Game {
   for (const u of g.units) {
     if (
       !classes[u.cls] ||
+      !races[u.race] ||
       !u.stats ||
       !Array.isArray(u.statuses) ||
       !Number.isFinite(u.hp) ||
