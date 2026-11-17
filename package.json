@@ -1,6 +1,6 @@
 {
   "name": "reinos-de-acero",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -11,7 +11,13 @@
     "test:visual": "node e2e/illustrated.mjs",
     "test:narration": "node e2e/narration.mjs",
     "test:animation": "node e2e/animation.mjs",
-    "test:art": "node e2e/art.mjs"
+    "test:art": "node e2e/art.mjs",
+    "desktop": "npm run build && electron .",
+    "desktop:win": "npm run build && electron-builder --win --x64 --publish never",
+    "desktop:pack": "npm run build && electron-builder --dir --publish never",
+    "test:desktop-unit": "node desktop/local-content.check.cjs",
+    "test:desktop": "node e2e/desktop.mjs",
+    "desktop:checksums": "node scripts/installer-checksums.cjs"
   },
   "dependencies": {
     "react": "^19.2.0",
@@ -21,9 +27,14 @@
     "@playwright/test": "^1.56.1",
     "@types/react": "^19.2.0",
     "@types/react-dom": "^19.2.0",
+    "electron": "45.3.4",
+    "electron-builder": "26.18.0",
     "prettier": "3.6.2",
     "typescript": "^5.9.3",
     "vite": "^7.2.0",
     "vitest": "^3.2.4"
-  }
+  },
+  "description": "RPG táctico de fantasía medieval para un jugador",
+  "author": "Reinos de Acero",
+  "main": "desktop/main.cjs"
 }

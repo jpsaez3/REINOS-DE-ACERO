@@ -2,6 +2,36 @@
 
 Prototipo de la **Fase 1** de un RPG táctico medieval para un jugador. Interfaz en español, cuatro aventureros, seis razas y seis clases combinables sin restricciones. Un encuentro completo en el Paso Ceniza contra un combatiente, una arquera y un hechicero.
 
+## Aplicación instalable para Windows
+
+Las descargas de escritorio están en [Releases de GitHub](https://github.com/jpsaez3/REINOS-DE-ACERO/releases). El archivo `Reinos-de-Acero-Setup-0.2.0-x64.exe` incluye el juego y su runtime para **Windows 10/11 de 64 bits**.
+
+1. Descarga el `.exe`, ábrelo y sigue el asistente en español.
+2. Inicia **Reinos de Acero** desde el escritorio o el menú Inicio.
+3. No necesitas instalar Node.js, abrir una terminal ni estar conectado para jugar.
+
+La versión todavía no lleva firma digital de editor, por lo que Windows puede mostrar un aviso de editor desconocido. El archivo `SHA256SUMS.txt` acompaña la descarga para comprobar su integridad.
+
+La aplicación conserva sus partidas en `%APPDATA%\Reinos de Acero`, incluso al actualizar o desinstalar. Las partidas del navegador pertenecen a su almacenamiento y **no se importan automáticamente**. El contenido sigue siendo el prototipo del Paso Ceniza; instalarlo no añade misiones nuevas.
+
+### Generar un instalador como desarrollador
+
+```sh
+npm ci
+npm run desktop:win
+```
+
+En Windows, genera el `.exe` completo en `release/`. No se requiere certificado para esta compilación sin firma. `npm run desktop` abre la compilación local en Electron. Desde Linux, el instalador NSIS requiere Wine; la vía mantenida para generar, instalar y comprobar Windows es el workflow `.github/workflows/windows-installer.yml`. Una etiqueta `desktop-v<versión>` ejecuta las pruebas, crea el instalador, lo instala en un Windows real, prueba el juego instalado, lo desinstala y publica el `.exe` y SHA-256 únicamente si esos pasos pasan. También admite ejecución manual para conservar el instalador como artefacto de Actions.
+
+```sh
+npm run test:desktop-unit  # validación del origen y las rutas locales
+npm run test:desktop       # arranque, arte incluido y guardado entre procesos; requiere pantalla
+npm run test:desktop -- --packaged  # prueba el ejecutable ya empaquetado
+npm run desktop:checksums # comprueba cabecera PE y genera SHA256SUMS.txt
+```
+
+Para probar un ejecutable instalado en otra ruta se puede definir `REINOS_PACKAGED_EXECUTABLE`. La prueba crea su propio perfil temporal. En Linux necesita una pantalla X; `REINOS_TEST_NO_SANDBOX=1` se reserva para contenedores de prueba que no puedan crear el sandbox. La aplicación distribuida mantiene aislamiento y sandbox activados.
+
 ## Instalación y ejecución
 
 Requisitos: Node.js 22.12 o superior (validado con 24.19) y npm.

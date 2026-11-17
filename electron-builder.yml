@@ -1,0 +1,41 @@
+appId: es.reinosdeacero.game
+productName: Reinos de Acero
+copyright: Copyright © 2026 Reinos de Acero
+directories:
+  output: release
+  buildResources: desktop/resources
+files:
+  - dist/**/*
+  - desktop/main.cjs
+  - desktop/local-content.cjs
+  - desktop/resources/icon.png
+  - desktop/resources/icon.ico
+  - package.json
+asar: true
+compression: maximum
+npmRebuild: false
+win:
+  target:
+    - target: nsis
+      arch:
+        - x64
+  icon: desktop/resources/icon.ico
+  signExecutable: false
+  artifactName: Reinos-de-Acero-Setup-${version}-${arch}.${ext}
+nsis:
+  oneClick: false
+  perMachine: false
+  allowElevation: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: Reinos de Acero
+  uninstallDisplayName: Reinos de Acero
+  deleteAppDataOnUninstall: false
+  runAfterFinish: true
+  installerLanguages:
+    - es_ES
+  language: 3082
+  displayLanguageSelector: false
+  installerIcon: desktop/resources/icon.ico
+  uninstallerIcon: desktop/resources/icon.ico
